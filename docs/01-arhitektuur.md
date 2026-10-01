@@ -22,36 +22,46 @@ Kui tasandid 1–2 on rohelised, aga tasand 4 punane, näitab süsteem **mõjuah
 ## Tehniline lahendus
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│ Next.js 15 (App Router, TypeScript)                           │
-│                                                               │
-│  app/(vaated)  Server Components — loevad andmed Supabase'ist  │
-│  app/actions   Server Actions — kirjutamine (vormid)           │
-│  lib/status    staatuse ja andmelünga loogika (puhas TS, testid)│
-│  components    UI (Tailwind + shadcn/ui), Recharts diagrammid  │
-└──────────────┬────────────────────────────────────────────────┘
-               │ @supabase/ssr (kasutaja sessioon → RLS kehtib)
-┌──────────────▼────────────────────────────────────────────────┐
-│ Supabase                                                       │
-│  Postgres — tabelid, vaated, RLS-poliitikad (õigused)         │
-│  Auth     — e-posti sisselogimine (magic link)                 │
-│  Storage  — bucket "evidence" tõendifailidele (privaatne)      │
-└───────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ Next.js 16 (App Router, TypeScript)                                 │
+│                                                                     │
+│  app/(app)/…     Server Components — vaated                         │
+│  app/actions     Server Actions — kõik kirjutamised (zod-valideerimine) │
+│  lib/status.ts   staatuse, üldstaatuse ja mõjuahela loogika (testid) │
+│  lib/model.ts    toorandmed → mõjuahel + arvutatud staatused         │
+│  components      UI (Tailwind 4), Recharts diagrammid                │
+└──────────┬──────────────────────────────────┬──────────────────────┘
+           │ lib/db.ts: postgres.js            │ @supabase/ssr
+           │ iga päring tehingus:              │ (ainult sisselogimine)
+           │  set role authenticated           │
+           │  request.jwt.claims = {sub: kasutaja}
+┌──────────▼──────────────────────────────────▼──────────────────────┐
+│ Supabase                                                            │
+│  Postgres — tabelid, vaated, RLS-poliitikad (õigused)              │
+│  Auth     — e-posti sisselogimine (magic link)                      │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 | Kiht | Valik | Miks |
 |---|---|---|
-| Frontend + backend | Next.js 15, TypeScript | üks projekt, üks juurutus (Vercel või kooli server) |
+| Frontend + backend | Next.js 16, React 19, TypeScript | üks projekt, üks juurutus (Vercel või kooli server) |
 | Andmebaas | Supabase Postgres | relatsiooniline mudel sobib mõjuahelaga; RLS jõustab rolle andmebaasis, mitte ainult UI-s |
+| Andmepöördus | `postgres.js` otse Postgresi, kasutaja rollis | vt allpool |
 | Autentimine | Supabase Auth (magic link) | koolis pole paroolihaldust vaja |
-| Diagrammid | Recharts | ajajoon ja trendijooned |
-| Failid | Supabase Storage | tõendid (PDF, XLSX, pildid) |
-| Eksport (2. etapp) | `exceljs` (Excel), `docx` (Word), brauseri print-CSS → PDF | ilma eraldi serverita |
-| Testid | Vitest (staatuseloogika), Playwright (põhivood) | |
+| Diagrammid | Recharts | trendijooned; väikesed trendid on SVG |
+| Failid (2. etapp) | Supabase Storage | MVP-s on tõend link (nt Google Drive / OneDrive) |
+| Eksport (2. etapp) | `exceljs` (Excel), `docx` (Word), print-CSS → PDF | ilma eraldi serverita |
+| Testid | Vitest: staatuseloogika + andmebaasi/RLS integratsioon | |
+
+### Miks otse Postgres, mitte supabase-js päringud?
+
+Juhtkonna vaade vajab korraga kogu arengukava andmeid (suunad, eesmärgid, mõõdikud, tulemused, tegevused, otsused, analüüsid). Selle laadimine on otse SQL-iga lihtsam ja kiirem. **Õigused jäävad samaks:** `lib/db.ts` funktsioon `asUser()` käivitab iga päringu tehingus rollis `authenticated` ja JWT-väitega `sub = kasutaja id`. Täpselt nii teeb ka Supabase'i enda API (PostgREST). Seega kehtivad samad RLS-poliitikad ja `auth.uid()`.
+
+Teine eelis: rakendust saab käivitada ja testida ka **ilma Supabase'ita** tavalise PostgreSQL-iga (`supabase/local/auth-stub.sql` jäljendab `auth` skeemi). Kohalikuks demoks on demosisselogimine (`DEV_LOGIN=1`), mis on tootmisrežiimis alati välja lülitatud.
 
 ### Põhimõtted
 
-- **Õigused andmebaasis.** Kõik kirjutamised käivad kasutaja sessiooniga, seega RLS-poliitikad (`supabase/migrations/0001_skeem.sql`) otsustavad, kes mida muudab. Vastutaja ei saa teise suuna andmeid muuta ka siis, kui UI-s on viga.
+- **Õigused andmebaasis.** Kõik kirjutamised käivad kasutaja nimel, seega RLS-poliitikad (`supabase/migrations/0001_skeem.sql`) otsustavad, kes mida muudab. Vastutaja ei saa teise suuna andmeid muuta ka siis, kui UI-s on viga. Seda kontrollivad testid `tests/db.test.ts`.
 - **Staatust ei salvestata, see arvutatakse.** Staatus tuleb alati reeglist + andmetest (`lib/status.ts`). Nii ei saa keegi värvi käsitsi „roheliseks keerata“ ja reegli muutmine kajastub kohe kõikjal.
 - **Ajalugu on muutumatu.** Kinnitatud aasta mõjuanalüüs salvestab hetktõmmise (`snapshot`) mõõdikute väärtustest ja staatustest; hilisemad parandused ei muuda möödunud aasta hinnangut tagantjärele.
 - **Päritolu alati nähtav.** Iga tulemus kannab allikat, mõõtmise kuupäeva, sisestajat ja sisestamise aega (sisestaja ja aja paneb andmebaasi trigger, mitte klient).
@@ -77,23 +87,30 @@ Lisaks MVP-s: arengusuuna detailvaade koos ajajoonega 2027–2030 ja juhtimisots
 - Vahesihid aastate kaupa (MVP-s eeldatakse lineaarset liikumist algtasemest sihini, vt [staatuse reegel](02-andmemudel.md#staatuse-arvutamine)).
 - Klassi/kooliastme kaupa jaotatud tulemused, mitme kooli tugi, teavitused.
 
-## Kaustastruktuur (kavandatud)
+## Kaustastruktuur
 
 ```
 app/
-  (auth)/login/
-  page.tsx                    → juhtkonna vaade
-  suunad/[code]/page.tsx      → arengusuuna detailvaade + ajajoon
-  suunad/[code]/analyys/[year]/ → aasta mõjuanalüüs
-  moodikud/[id]/page.tsx      → mõõdiku kaart (ajalugu, päritolu, tõendid)
-  seaded/                     → kasutajad, allikad, staatusereeglid (admin)
-  actions/                    → server actions
+  login/                         sisselogimine (magic link / demo)
+  auth/callback/                 magic linki tagasisuunamine
+  (app)/page.tsx                 juhtkonna vaade
+  (app)/suunad/[code]/           arengusuuna detailvaade + ajajoon
+  (app)/suunad/[code]/analuus/[aasta]/  aasta mõjuanalüüs
+  (app)/moodikud/[id]/, uus/     mõõdiku kaart (tulemused, päritolu, tõendid), uus mõõdik
+  (app)/tegevused/[id]/, uus/    tegevus
+  (app)/seaded/                  kasutajad, vastutajad, allikad, reeglid (admin)
+  actions/                       server actions
 lib/
-  status.ts  status.test.ts   → staatuse ja üldstaatuse arvutus
-  gaps.ts                     → andmelüngad
-  supabase/                   → kliendid (server/brauser)
-components/
+  status.ts (+ test)             staatus, üldstaatus, mõjuahela katkestus
+  model.ts                       mõjuahela mudel, hetktõmmis
+  series.ts (+ test)             diagrammi andmed (tegelik vs plaan)
+  data.ts                        andmete laadimine, aruandeaasta
+  db.ts                          ühendus + asUser() (RLS)
+  auth.ts                        sessioon, rollid
+components/                      UI komponendid
 supabase/
-  migrations/0001_skeem.sql
-  seed.sql
+  migrations/                    skeem, RLS, triggerid
+  seed.sql                       näidisandmed
+  local/auth-stub.sql            ainult kohalikuks arenduseks
+tests/db.test.ts                 RLS ja näidisandmete integratsioonitestid
 ```

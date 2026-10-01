@@ -42,7 +42,7 @@ Simuleeritud seis: **2027 sügis** (aruandeaasta 2027, kuupäev 01.10.2027), alg
 | | „Tundides on piisavalt rahulik“ % | tulemus / õppija | õpilasküsitlus | 55 | 59 | 70 | 🟩 107% |
 | S3.3 Jõud | Õpetajate tööheaolu % (säilimine ≥ 80, ±3) | tulemus / praktika | HARNO rahulolu | 82 | 79 | 80 | 🟩 |
 
-**Üldstaatus 🟨** (üks punane, mis pole võtmenäitaja).
+**Üldstaatus 🟨** (üks punane, mis pole võtmenäitaja). **Mõjuahela signaal:** S3.1 — KiVa tunnid toimuvad (🟩), aga turvatunne ei paranenud (🟥).
 
 ## Tegevused 2027
 

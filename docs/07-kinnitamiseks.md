@@ -1,6 +1,6 @@
-# 7. Kinnitamiseks enne koodi kirjutamist
+# 7. Tehtud otsused
 
-Need on otsused, mille tegin eeldusena. Igaühe juures on minu soovitus; kui see sobib, võib vastata lihtsalt „kõik sobib“.
+✅ **Kinnitatud** — kõik allolevad eeldused kinnitati ja MVP on ehitatud nende järgi. Tabel jääb alles otsuste ajaloona.
 
 | # | Küsimus | Eeldus / soovitus |
 |---|---|---|
@@ -19,7 +19,7 @@ Need on otsused, mille tegin eeldusena. Igaühe juures on minu soovitus; kui see
 | 13 | **Majutus.** | Supabase (EL-i regioon, nt Frankfurt) + Vercel või kooli/linna server. |
 | 14 | **Keel.** | Kasutajaliides eesti keeles; koodi ja andmebaasi identifikaatorid inglise keeles (sõnastik andmemudelis). |
 
-## Pärast kinnitust — ehitusjärjekord
+## Ehitusjärjekord (tehtud)
 
 1. Next.js + Supabase projekt, skeem, seed, sisselogimine, rollid
 2. `lib/status.ts` + ühiktestid (staatus, üldstaatus, mõjuahela signaal, lüngad)

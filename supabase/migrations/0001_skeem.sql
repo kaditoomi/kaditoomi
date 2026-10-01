@@ -307,7 +307,7 @@ language sql stable as $$
   union all
   -- 4) aruandeaasta tulemus sisestamata
   select g.direction_id, g.id, i.id, 'no_current_result',
-         'Mõõdikul „' || i.name || '“ puudub ' || report_year || '. aasta tulemus'
+         'Mõõdikul „' || i.name || '“ puudub ' || (report_year - 1) || '/' || right(report_year::text, 2) || ' õppeaasta tulemus'
   from indicators i join goals g on g.id = i.goal_id
   where i.active and i.baseline_value is not null
     and coalesce(i.baseline_year, 0) < report_year

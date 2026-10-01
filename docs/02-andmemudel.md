@@ -112,7 +112,7 @@ Arvutatakse **tulemusnäitajatest**, millel on aruandeaasta andmed (protsessinä
 
 ### Mõjuahela signaal
 
-Iga eesmärgi kohta võrreldakse tasandeid. Kui protsessinäitaja (praktika / jõudis õppijani) on 🟩, aga sama eesmärgi tulemusnäitaja 🟥, kuvatakse: **„Praktika muutus, kuid õppija tulemus mitte — vaata üle, kas tegevus jõuab õppijani.“** (Näidisandmetes S2.1: 74% arenguvestlustest lõpeb kokkuleppega, aga õpilaste „tean oma järgmist sammu“ langes.)
+Iga eesmärgi kohta võrreldakse tasandeid. Kui protsessinäitaja (praktika / jõudis õppijani) on 🟩, aga sama eesmärgi tulemusnäitaja 🟥, kuvatakse: **„Praktika muutus, kuid õppija tulemus mitte — vaata üle, kas tegevus jõuab õppijani.“** (Näidisandmetes S2.1: 74% arenguvestlustest lõpeb kokkuleppega, aga õpilaste „tean oma järgmist sammu“ langes; S3.1: KiVa tunnid toimuvad, aga turvatunne ei paranenud.)
 
 ## Andmelünk
 

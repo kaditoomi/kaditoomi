@@ -23,7 +23,8 @@ insert into profiles (id, full_name, email, role) values
   ('00000000-0000-0000-0000-000000000002', 'Õppejuht I kooliaste (demo)',    'suund1@demo.test',    'owner'),
   ('00000000-0000-0000-0000-000000000003', 'Õppejuht II–III kooliaste (demo)','suund2@demo.test',   'owner'),
   ('00000000-0000-0000-0000-000000000004', 'Tugispetsialistide juht (demo)', 'suund3@demo.test',    'owner'),
-  ('00000000-0000-0000-0000-000000000005', 'Hoolekogu liige (demo)',         'hoolekogu@demo.test', 'viewer');
+  ('00000000-0000-0000-0000-000000000005', 'Hoolekogu liige (demo)',         'hoolekogu@demo.test', 'viewer')
+on conflict (id) do update set full_name = excluded.full_name, email = excluded.email, role = excluded.role;  -- profiil võib olla trigeriga juba loodud
 
 -- ---------- Arengukava ----------
 insert into plans (id, school_name, title, start_year, end_year, baseline_year) values
