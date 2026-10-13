@@ -64,27 +64,54 @@ revoke all on function public.handle_new_user(), public.handle_user_email_change
 --      alter role app_server with password '<pikk juhuslik parool>';
 --    Ühendus (Supabase → Connect → Transaction pooler), kasutajanimi app_server.<projekti-ref>.
 -- ---------------------------------------------------------------------
+-- Supabase'i "postgres" ei ole superuser: ta ei tohi muuta olemasoleva rolli atribuute
+-- (ALTER ROLE ... NOBYPASSRLS/NOREPLICATION annab vea "permission denied to alter role").
+-- Seetõttu: uus roll luuakse ainult turvaliste vaikeväärtustega (NOSUPERUSER, NOBYPASSRLS,
+-- NOREPLICATION, NOCREATEDB, NOCREATEROLE on vaikimisi), olemasolevat rolli ainult KONTROLLITAKSE.
 do $$
-declare m record;
+declare
+  r record;
+  bad text;
 begin
   if not exists (select 1 from pg_roles where rolname = 'app_server') then
-    create role app_server login noinherit nosuperuser nocreatedb nocreaterole nobypassrls noreplication;
-  else
-    alter role app_server login noinherit nosuperuser nocreatedb nocreaterole nobypassrls noreplication;
+    create role app_server login noinherit;
   end if;
-  -- app_server tohib olla ainult rolli authenticated liige
-  for m in
-    select r.rolname from pg_auth_members am join pg_roles r on r.oid = am.roleid
-    where am.member = (select oid from pg_roles where rolname = 'app_server') and r.rolname <> 'authenticated'
-  loop
-    execute format('revoke %I from app_server', m.rolname);
-  end loop;
-end $$;
 
--- Otseõigusi ei anta; kõik käib rolli authenticated kaudu.
-revoke all on all tables    in schema public from app_server;
-revoke all on all functions in schema public from app_server;
-grant authenticated to app_server;
+  select * into r from pg_roles where rolname = 'app_server';
+  bad := concat_ws(', ',
+    case when r.rolsuper      then 'SUPERUSER'   end,
+    case when r.rolbypassrls  then 'BYPASSRLS'   end,
+    case when r.rolreplication then 'REPLICATION' end,
+    case when r.rolcreaterole then 'CREATEROLE'  end,
+    case when r.rolcreatedb   then 'CREATEDB'    end,
+    case when r.rolinherit    then 'INHERIT'     end);
+  if bad <> '' then
+    raise exception 'Roll app_server on ohtlike atribuutidega: %. Kustuta roll (drop role app_server) ja käivita fail uuesti.', bad;
+  end if;
+
+  -- app_server tohib olla ainult rolli authenticated liige
+  select string_agg(g.rolname, ', ') into bad
+  from pg_auth_members am join pg_roles g on g.oid = am.roleid
+  where am.member = r.oid and g.rolname <> 'authenticated';
+  if bad is not null then
+    raise exception 'Roll app_server on lisaks rollide % liige. Eemalda need (revoke ... from app_server) ja käivita fail uuesti.', bad;
+  end if;
+
+  -- app_serveril ei tohi olla otseõigusi tabelitele (kõik käib rolli authenticated kaudu)
+  if exists (select 1 from information_schema.role_table_grants where grantee = 'app_server') then
+    raise exception 'Rollil app_server on otseõigusi tabelitele. Eemalda need: revoke all on all tables in schema public from app_server;';
+  end if;
+
+  -- Liikmesus rollis authenticated (vajalik "set local role authenticated" jaoks).
+  -- Antakse ainult siis, kui seda veel pole.
+  if not pg_has_role('app_server', 'authenticated', 'MEMBER') then
+    begin
+      grant authenticated to app_server;
+    exception when insufficient_privilege then
+      raise exception 'Rolli authenticated ei saanud app_server rollile anda (puudub ADMIN OPTION). Käivita Supabase''i SQL Editoris eraldi: grant authenticated to app_server;  Kui see annab sama vea, võta ühendust Supabase''i toega.';
+    end;
+  end if;
+end $$;
 
 commit;
 
@@ -97,7 +124,11 @@ commit;
 --      where not exists (select 1 from public.profiles p where p.id = u.id);
 --
 -- b) app_server ei tohi RLS-ist mööda minna:
---      select rolname from pg_roles where rolname = 'app_server' and (rolsuper or rolbypassrls or rolinherit);
+--      select rolname from pg_roles where rolname = 'app_server'
+--        and (rolsuper or rolbypassrls or rolreplication or rolcreaterole or rolcreatedb or rolinherit);
+--
+-- b2) app_server peab olema rolli authenticated liige (see päring peab andma TÄPSELT ühe rea "true"):
+--      select pg_has_role('app_server', 'authenticated', 'MEMBER');
 --
 -- c) anon ei tohi saada ühtegi tabeli- ega vaateõigust:
 --      select table_name, privilege_type from information_schema.role_table_grants
