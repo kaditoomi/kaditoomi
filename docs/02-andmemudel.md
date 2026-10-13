@@ -141,7 +141,7 @@ Lüngad kuvatakse juhtkonna vaates eraldi plokis ja arengusuuna vaates eesmärgi
 
 Jõustatakse Postgres RLS-poliitikatega. Lisaks:
 
-- **Liikmesus.** Andmeid näeb ainult kasutaja, kellel on profiil. Profiil tekib ainult kutsutud kasutajale, nii et iseregistreerunud kasutaja ega sisselogimata `anon` ei näe midagi. Vaade `v_indicator_latest` ja aruandefunktsioonid töötavad küsija õigustes (`security_invoker`).
+- **Liikmesus.** Andmeid näeb ainult kasutaja, kellel on **aktiivne** profiil (`profiles.is_active`). Profiil tekib ainult kutsutud kasutajale, nii et iseregistreerunud kasutaja ega sisselogimata `anon` ei näe midagi. Peatatud kasutaja ei näe ega muuda midagi; viimast aktiivset administraatorit ei saa peatada. Vaade `v_indicator_latest` ja aruandefunktsioonid töötavad küsija õigustes (`security_invoker`).
 - **Suundade piirid.** UPDATE kontrollib nii vana kui uut rida, seega mõõdikut, tulemust, tegevust ega eesmärki ei saa teise suunda „ümber tõsta“. Tegevuse ja mõõdiku seos ning otsuse viited (eesmärk, mõõdik, tegevus, analüüs) peavad olema samas suunas (triggerid).
 - **Andmebaas paneb autori.** Tulemuse sisestaja, tõendi lisaja, otsuse koostaja ja analüüsi kinnitaja pannakse andmebaasis sisselogitud kasutaja järgi; kliendi saadetud väärtust ei usaldata. Analüüsi staatust ja hetktõmmist muudab ainult admin.
 - **Viimane administraator jääb alles:** viimast administraatorit ei saa eemaldada.

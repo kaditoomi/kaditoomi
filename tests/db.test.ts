@@ -43,7 +43,7 @@ suite("andmebaas", () => {
         evidence: await q("evidence"),
         decisions: await q("decisions"),
         analyses: await q("impact_analyses"),
-        profiles: await tx`select id, full_name, email, role from profiles`,
+        profiles: await tx`select id, full_name, email, role, is_active from profiles`,
         gaps: await tx`select * from data_gaps(${year})`,
       };
       return buildModel(raw as unknown as Parameters<typeof buildModel>[0], year, "2027-10-01");
@@ -207,7 +207,7 @@ suite("andmebaas", () => {
 
   it("viimast administraatorit ei saa eemaldada", async () => {
     await expect(asUser(ADMIN, (tx) => tx`update profiles set role = 'viewer' where id = ${ADMIN}`)).rejects.toThrow(
-      /Vähemalt üks administraator/,
+      /Vähemalt üks aktiivne administraator/,
     );
     // vastutaja ei saa endale rolli muuta
     const r = await asUser(S1_OWNER, (tx) => tx`update profiles set role = 'admin' where id = ${S1_OWNER}`);
@@ -255,5 +255,45 @@ suite("andmebaas", () => {
       return tx`update goals set title = title where code = 'S2.1'`;
     });
     expect(n.count).toBe(0);
+  });
+
+  it("kutse kahes sammus (Supabase Auth: kasutaja luuakse, siis märgitakse invited_at) loob profiili", async () => {
+    const U2 = "77777777-7777-7777-7777-777777777777";
+    await sql`insert into auth.users (id, email) values (${U2}, 'kutsutav@example.org')`;
+    try {
+      expect((await sql`select count(*)::int as n from profiles where id = ${U2}`)[0].n).toBe(0);
+      await sql`update auth.users set invited_at = now() where id = ${U2}`;
+      const [p] = await sql`select role, is_active from profiles where id = ${U2}`;
+      expect(p).toEqual({ role: "viewer", isActive: true });
+      // koolijuht määrab rolli
+      await asUser(ADMIN, (tx) => tx`update profiles set role = 'admin' where id = ${U2}`);
+      const ok = await asUser(U2, (tx) => tx`select count(*)::int as n from status_rules`);
+      expect(ok[0].n).toBeGreaterThan(0);
+      await sql`update profiles set role = 'viewer' where id = ${U2}`;
+    } finally {
+      await sql`delete from auth.users where id = ${U2}`;
+    }
+  });
+
+  it("peatatud (mitteaktiivne) kasutaja ei näe ega muuda midagi", async () => {
+    await asUser(ADMIN, (tx) => tx`update profiles set is_active = false where id = ${S1_OWNER}`);
+    try {
+      const seen = await asUser(S1_OWNER, async (tx) => ({
+        ind: (await tx`select count(*)::int as n from indicators`)[0].n,
+        own: (await tx`select count(*)::int as n from profiles`)[0].n,
+        upd: (await tx`update goals set title = title where code = 'S1.1'`).count,
+      }));
+      expect(seen).toEqual({ ind: 0, own: 0, upd: 0 });
+    } finally {
+      await asUser(ADMIN, (tx) => tx`update profiles set is_active = true where id = ${S1_OWNER}`);
+    }
+    const back = await asUser(S1_OWNER, (tx) => tx`update goals set title = title where code = 'S1.1'`);
+    expect(back.count).toBe(1);
+  });
+
+  it("viimast aktiivset administraatorit ei saa peatada", async () => {
+    await expect(asUser(ADMIN, (tx) => tx`update profiles set is_active = false where id = ${ADMIN}`)).rejects.toThrow(
+      /Vähemalt üks aktiivne administraator/,
+    );
   });
 });

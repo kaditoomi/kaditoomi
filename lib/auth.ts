@@ -53,6 +53,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   });
 });
 
+/** Sisselogitud, kuid profiil puudub või on peatatud (RLS ei näita profiili). */
+export async function hasSessionWithoutAccess(): Promise<boolean> {
+  return (await sessionUserId()) !== null && (await getCurrentUser()) === null;
+}
+
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -71,6 +76,10 @@ export const canEditDirection = (user: CurrentUser, directionId: string) =>
 /** Demosisselogimise kasutajate loend (ainult DEV_LOGIN=1). Loeb RLS-ist mööda, sest kasutajat veel pole. */
 export async function listDevUsers() {
   if (!env.devLogin) return [];
-  return sql<{ id: string; fullName: string; role: Role }[]>`
-    select id, full_name, role from profiles order by role, full_name`;
+  try {
+    return await sql<{ id: string; fullName: string; role: Role }[]>`
+      select id, full_name, role from profiles where is_active order by role, full_name`;
+  } catch {
+    return []; // nt piiratud app_server ühendus: demoloendit ei saa ilma RLS-ita lugeda
+  }
 }

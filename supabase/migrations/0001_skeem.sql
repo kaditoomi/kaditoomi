@@ -1,7 +1,8 @@
 -- =====================================================================
 -- Arengukava seire- ja juhtimisvahend — andmebaasi skeem (MVP)
 -- Sihtplatvorm: Supabase (PostgreSQL 15 ja 17). Kasutab auth.users ja auth.uid().
--- Käivitada Supabase'i SQL Editoris rollis "postgres", seejärel 0002_kasutajad.sql.
+-- Käivitada Supabase'i SQL Editoris rollis "postgres"; SEEJÄREL ALATI 0001b_turvaparandus.sql
+-- ja 0002_kasutajad.sql (0001b on kehtiv õiguste ja turvalisuse määratlus).
 --
 -- Keskne loogika:
 --   arengusuund → eesmärk → mõõdik → algtase → sihttase → tulemus (aasta)

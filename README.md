@@ -49,7 +49,12 @@ Sisselogimislehel vali demokasutaja: koolijuht, ükskõik milline kolmest suuna 
 1. **Loo Supabase'i projekt** (EL-i regioon, PostgreSQL 15 või 17).
 2. **Lülita avalik registreerimine välja:** Authentication → Sign In / Providers → *Allow new users to sign up* = väljas. Kasutajad lisatakse ainult kutsega.
 3. **Lülita Data API välja** (Project Settings → Data API) või eemalda `public` avatud skeemide hulgast. Rakendus ei kasuta Supabase'i REST API-t; nii väheneb ründepind. RLS kaitseb andmeid ka siis, kui API jääb sisse.
-4. **Käivita SQL Editoris järjest** `supabase/migrations/0001_skeem.sql` ja `0002_kasutajad.sql`. Näidisandmeid (`seed.sql`) päris kasutuses ei käivitata.
+4. **Käivita SQL Editoris järjest:**
+   1. `supabase/migrations/0001_skeem.sql` (tabelid; kui juba käivitatud, jäta vahele);
+   2. `supabase/migrations/0001b_turvaparandus.sql` (õigused ja turvalisus; säilitab olemasolevad andmed, võib käivitada korduvalt);
+   3. `supabase/migrations/0002_kasutajad.sql` (kutsutud kasutajate profiilid, `app_server` roll).
+
+   Faili `0002` lõpus on kontrollpäringud; kõik peavad andma tühja tulemuse. Näidisandmeid (`seed.sql`) päris kasutuses ei käivitata.
 5. **Määra serveri andmebaasikasutaja parool** (genereeri pikk juhuslik parool, ära pane seda faili ega repo):
    `alter role app_server with password '…';`
 6. **Lisa arengukava, vaikereegel ja koolijuht:**
@@ -64,7 +69,7 @@ Sisselogimislehel vali demokasutaja: koolijuht, ükskõik milline kolmest suuna 
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (avalik võti, mitte *secret / service_role*).
 
    `DEV_LOGIN` ja `ARUANDE_KUUPAEV` jäta seadistamata.
-9. **Koolijuht logib sisse** ja lisab **Seadetes** arengusuunad, vastutajad, andmeallikad ja reeglid. Uued kasutajad kutsutakse Supabase'is (*Invite user*); nad saavad rolli „vaatleja“, kuni koolijuht rolli muudab.
+9. **Koolijuht logib sisse** ja lisab **Seadetes** arengusuunad, vastutajad, andmeallikad ja reeglid. Uued kasutajad kutsutakse Supabase'is (*Invite user*); nad saavad rolli „vaatleja“, kuni koolijuht rolli muudab. Linnukese „Aktiivne“ eemaldamine peatab kasutaja ligipääsu kohe, kasutajat kustutamata.
 
 Kui kasutaja lisati Supabase'is ilma kutseta (*Create new user*), profiili ei teki ja ta ei näe midagi. Profiili saab siis lisada käsitsi:
 `insert into profiles (id, full_name, email, role) select id, '…', email, 'viewer' from auth.users where email = '…';`

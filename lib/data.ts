@@ -28,7 +28,7 @@ async function loadRaw(tx: Tx, reportYear: number): Promise<RawData | null> {
     tx`select * from evidence order by added_at`,
     tx`select * from decisions order by decided_on desc, created_at desc`,
     tx`select * from impact_analyses order by year desc`,
-    tx`select id, full_name, email, role from profiles order by full_name`,
+    tx`select id, full_name, email, role, is_active from profiles order by full_name`,
     tx`select * from data_gaps(${reportYear})`,
   ]);
   return {

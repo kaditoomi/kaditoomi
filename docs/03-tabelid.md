@@ -8,6 +8,7 @@ Täielik, käivitatav skeem koos piirangute, vaadete ja õigustega: [`supabase/m
 | id | uuid PK → auth.users | |
 | full_name, email | text | |
 | role | `admin` / `owner` / `viewer` | administraator, vastutaja, vaatleja |
+| is_active | boolean | `false` = ligipääs peatatud (RLS ei näita midagi) |
 
 ### `plans` — arengukava
 `id`, `school_name`, `title`, `start_year` (2027), `end_year` (2030), `baseline_year` (2026)

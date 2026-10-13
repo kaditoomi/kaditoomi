@@ -389,9 +389,16 @@ export async function reopenAnalysis(_p: ActionState, fd: FormData): Promise<Act
 
 export async function updateProfile(_p: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async (tx, user) => {
-    const p = parseForm({ id: fUuid, fullName: fRequired, role: z.enum(["admin", "owner", "viewer"]) }, fd);
-    if (p.id === user.id && p.role !== "admin") throw new UserError("Enda administraatoriõigust ei saa eemaldada");
-    expectRows(await tx`update profiles set full_name = ${p.fullName}, role = ${p.role} where id = ${p.id}`);
+    const p = parseForm(
+      { id: fUuid, fullName: fRequired, role: z.enum(["admin", "owner", "viewer"]), isActive: fBool },
+      fd,
+    );
+    if (p.id === user.id && (p.role !== "admin" || !p.isActive)) {
+      throw new UserError("Enda administraatoriõigust ei saa eemaldada ega oma kontot peatada");
+    }
+    expectRows(
+      await tx`update profiles set full_name = ${p.fullName}, role = ${p.role}, is_active = ${p.isActive} where id = ${p.id}`,
+    );
   });
 }
 

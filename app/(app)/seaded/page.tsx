@@ -17,7 +17,7 @@ export default async function SettingsPage() {
       <Section title="Kasutajad ja rollid">
         <p className="mb-3 text-sm text-ink-2">
           Uue kasutaja lisamiseks kutsu ta Supabase&apos;is (Authentication → Users → Invite user). Esimesel sisselogimisel saab
-          ta rolli „vaatleja“; seejärel määra siin roll. Vastutaja muudab ainult nende arengusuundade andmeid, mille
+          ta rolli „vaatleja“; seejärel määra siin roll. Eemalda linnuke „Aktiivne“, et ligipääs peatada. Vastutaja muudab ainult nende arengusuundade andmeid, mille
           vastutajaks ta on määratud.
         </p>
         <div className="overflow-x-auto">
@@ -27,18 +27,22 @@ export default async function SettingsPage() {
                 <th>Nimi</th>
                 <th>E-post</th>
                 <th>Roll</th>
+                <th>Ligipääs</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {model.profiles.map((p) => (
                 <tr key={p.id}>
-                  <td colSpan={4} className="p-0">
-                    <ActionForm action={updateProfile} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2 px-2 py-1.5">
+                  <td colSpan={5} className="p-0">
+                    <ActionForm action={updateProfile} className="grid grid-cols-[1fr_1fr_1fr_auto_auto] items-center gap-2 px-2 py-1.5">
                       <input type="hidden" name="id" value={p.id} />
                       <input name="fullName" defaultValue={p.fullName} className="input" required aria-label="Nimi" />
                       <span className="truncate text-sm text-ink-2">{p.email ?? "—"}</span>
                       <Select name="role" options={optionsFrom(ROLE_LABEL)} defaultValue={p.role} />
+                      <label className="flex items-center gap-1.5 text-sm">
+                        <input type="checkbox" name="isActive" defaultChecked={p.isActive} /> Aktiivne
+                      </label>
                       <SubmitButton small variant="default">
                         Salvesta
                       </SubmitButton>

@@ -189,6 +189,7 @@ export interface Profile {
   fullName: string;
   email: string | null;
   role: Role;
+  isActive: boolean;
 }
 
 export interface DataGap {

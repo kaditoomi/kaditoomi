@@ -1,13 +1,28 @@
 import { redirect } from "next/navigation";
-import { devLogin } from "@/app/actions/session";
+import { devLogin, logout } from "@/app/actions/session";
 import { MagicLinkForm } from "@/components/login-form";
-import { getCurrentUser, listDevUsers } from "@/lib/auth";
+import { getCurrentUser, hasSessionWithoutAccess, listDevUsers } from "@/lib/auth";
 import { env, supabaseConfigured } from "@/lib/env";
 import { ROLE_LABEL } from "@/lib/format";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ viga?: string }> }) {
   if (await getCurrentUser()) redirect("/");
   const { viga } = await searchParams;
+  if (await hasSessionWithoutAccess()) {
+    return (
+      <main className="mx-auto mt-16 max-w-md px-4">
+        <div className="card p-6">
+          <h1 className="text-lg font-semibold">Ligipääs puudub</h1>
+          <p className="mt-2 text-sm text-ink-2">
+            Oled sisse logitud, kuid sul pole selles keskkonnas aktiivset kasutajakontot. Ligipääsu annab koolijuht.
+          </p>
+          <form action={logout} className="mt-4">
+            <button className="btn">Logi välja</button>
+          </form>
+        </div>
+      </main>
+    );
+  }
   const devUsers = await listDevUsers();
   return (
     <main className="mx-auto mt-16 max-w-md px-4">
