@@ -99,6 +99,9 @@ Seotud **täpselt ühega**: `indicator_result_id` / `activity_id` / `analysis_id
 ### `decisions` — juhtimisotsus / tegevuskava muudatus
 `direction_id`, valikuliselt `goal_id` / `indicator_id` / `activity_id` / `analysis_id`; `decided_on`, `kind` (jätkame / muudame / loobume / lisame / muu), `title`, `rationale`, `effective_year`, `owner_id`.
 
+### `audit_log` — muudatuste ajalugu
+`changed_at`, `changed_by`, `table_name`, `record_id`, `direction_id`, `action` (INSERT/UPDATE/DELETE), `changed_fields`, `old_data`, `new_data`. Kirjutavad ainult triggerid.
+
 ## Vaated ja funktsioonid
 
 | Nimi | Otstarve |
@@ -106,4 +109,4 @@ Seotud **täpselt ühega**: `indicator_result_id` / `activity_id` / `analysis_id
 | `v_indicator_latest` | mõõdik + viimane ja eelmine tulemus + päritolu (dashboard, „viimase aasta muutus“) |
 | `data_gaps(aasta)` | andmelüngad |
 | `overdue_activities(kuupäev)` | tähtaja ületanud tegevused |
-| `is_admin()`, `can_edit_direction(id)` | RLS-abifunktsioonid |
+| `is_member()`, `is_admin()`, `can_edit_direction(id)`, `can_edit_evidence(…)` | RLS-abifunktsioonid |

@@ -46,21 +46,35 @@ Sisselogimislehel vali demokasutaja: koolijuht, ükskõik milline kolmest suuna 
 
 ## Juurutamine (Supabase + Vercel)
 
-1. Loo Supabase'i projekt (EL-i regioon).
-2. Käivita SQL Editoris järjest `supabase/migrations/0001_skeem.sql` ja `0002_kasutajad.sql`. Näidisandmeid (`seed.sql`) päris kasutuses ei käivitata.
-3. Lisa arengukava ja koolijuht:
-   - Authentication → Users → *Invite user* (koolijuhi e-post).
+1. **Loo Supabase'i projekt** (EL-i regioon, PostgreSQL 15 või 17).
+2. **Lülita avalik registreerimine välja:** Authentication → Sign In / Providers → *Allow new users to sign up* = väljas. Kasutajad lisatakse ainult kutsega.
+3. **Lülita Data API välja** (Project Settings → Data API) või eemalda `public` avatud skeemide hulgast. Rakendus ei kasuta Supabase'i REST API-t; nii väheneb ründepind. RLS kaitseb andmeid ka siis, kui API jääb sisse.
+4. **Käivita SQL Editoris järjest** `supabase/migrations/0001_skeem.sql` ja `0002_kasutajad.sql`. Näidisandmeid (`seed.sql`) päris kasutuses ei käivitata.
+5. **Määra serveri andmebaasikasutaja parool** (genereeri pikk juhuslik parool, ära pane seda faili ega repo):
+   `alter role app_server with password '…';`
+6. **Lisa arengukava, vaikereegel ja koolijuht:**
    - SQL-is: `insert into plans (school_name, title, start_year, end_year, baseline_year) values ('Tartu Kesklinna Kool', 'Arengukava 2027–2030', 2027, 2030, 2026);`
-   - Seejärel: `update profiles set role = 'admin', full_name = '…' where email = '…';`
-   - Lisa vähemalt üks staatusereegel (vaikereegel): `insert into status_rules (name, is_default) values ('Vaikereegel 75/40', true);`
-4. Seadista Authentication → URL Configuration → Redirect URLs: `https://<sinu-domeen>/auth/callback`.
-5. Seadista Vercelis keskkonnamuutujad:
-   - `DATABASE_URL`: Supabase → Connect → *Transaction pooler* või *Session pooler*;
+   - SQL-is: `insert into status_rules (name, is_default) values ('Vaikereegel 75/40', true);`
+   - Authentication → Users → *Invite user* (koolijuhi e-post). Profiil tekib automaatselt rolliga „vaatleja“.
+   - SQL-is: `update profiles set role = 'admin', full_name = '…' where email = '…';`
+7. **Seadista** Authentication → URL Configuration → Redirect URLs: `https://<sinu-domeen>/auth/callback`.
+8. **Seadista Vercelis keskkonnamuutujad** (märgi `DATABASE_URL` tundlikuks, *Sensitive*):
+   - `DATABASE_URL`: Supabase → Connect → *Transaction pooler*. Asenda kasutajanimi `postgres.<ref>` kasutajaga `app_server.<ref>` ja parool punktis 5 määratuga. **Ära kasuta `postgres` kasutajat**: see möödub RLS-ist.
    - `NEXT_PUBLIC_SUPABASE_URL`;
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (avalik võti, mitte *secret / service_role*).
 
    `DEV_LOGIN` ja `ARUANDE_KUUPAEV` jäta seadistamata.
-6. Koolijuht logib sisse ja lisab **Seadetes** arengusuunad, vastutajad, andmeallikad ja reeglid. Uued kasutajad kutsutakse Supabase'is; esimesel sisselogimisel saavad nad rolli „vaatleja“.
+9. **Koolijuht logib sisse** ja lisab **Seadetes** arengusuunad, vastutajad, andmeallikad ja reeglid. Uued kasutajad kutsutakse Supabase'is (*Invite user*); nad saavad rolli „vaatleja“, kuni koolijuht rolli muudab.
+
+Kui kasutaja lisati Supabase'is ilma kutseta (*Create new user*), profiili ei teki ja ta ei näe midagi. Profiili saab siis lisada käsitsi:
+`insert into profiles (id, full_name, email, role) select id, '…', email, 'viewer' from auth.users where email = '…';`
+
+### Turvamudel lühidalt
+
+- **Andmebaas jõustab kõik õigused (RLS).** Server teeb iga päringu sisselogitud kasutaja nimel (`set local role authenticated` + kasutaja id). Kasutaja id tuleb Supabase Authi poolt kontrollitud sessioonist.
+- **`app_server` on piiratud roll.** Sellel endal pole ühtegi tabeliõigust, see ei möödu RLS-ist ega saa muuta skeemi ega `auth` andmeid.
+- **`DATABASE_URL` on serveri saladus,** sama tundlik kui Supabase'i *secret key*. Selle teadja saab tegutseda suvalise rakenduse kasutaja nimel, kuid ainult RLS-i piires: skeemi, kasutajakontosid ega muudatuste ajalugu ta muuta ei saa.
+- **Muudatuste ajalugu (`audit_log`)** salvestub kõigi oluliste tabelite muudatuste kohta (sh tulemused, algtasemed, sihid, rollid). Selle kirjutavad ainult triggerid; muuta või kustutada seda ei saa.
 
 ## Arendus
 

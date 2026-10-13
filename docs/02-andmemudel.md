@@ -139,4 +139,32 @@ Lüngad kuvatakse juhtkonna vaates eraldi plokis ja arengusuuna vaates eesmärgi
 | Mõjuanalüüsi mustand | ✔ | ✔ (oma suund) | – |
 | Mõjuanalüüsi kinnitamine (lukustab) | ✔ | – | – |
 
-Jõustatakse Postgres RLS-poliitikatega; kontrollitud lokaalselt (vastutaja ei saa muuta teise suuna tulemust ega kinnitada analüüsi; kinnitatud analüüsi ei saa vastutaja muuta; vaatleja ei saa midagi kirjutada).
+Jõustatakse Postgres RLS-poliitikatega. Lisaks:
+
+- **Liikmesus.** Andmeid näeb ainult kasutaja, kellel on profiil. Profiil tekib ainult kutsutud kasutajale, nii et iseregistreerunud kasutaja ega sisselogimata `anon` ei näe midagi. Vaade `v_indicator_latest` ja aruandefunktsioonid töötavad küsija õigustes (`security_invoker`).
+- **Suundade piirid.** UPDATE kontrollib nii vana kui uut rida, seega mõõdikut, tulemust, tegevust ega eesmärki ei saa teise suunda „ümber tõsta“. Tegevuse ja mõõdiku seos ning otsuse viited (eesmärk, mõõdik, tegevus, analüüs) peavad olema samas suunas (triggerid).
+- **Andmebaas paneb autori.** Tulemuse sisestaja, tõendi lisaja, otsuse koostaja ja analüüsi kinnitaja pannakse andmebaasis sisselogitud kasutaja järgi; kliendi saadetud väärtust ei usaldata. Analüüsi staatust ja hetktõmmist muudab ainult admin.
+- **Viimane administraator jääb alles:** viimast administraatorit ei saa eemaldada.
+- **Õigused.** Supabase'i vaikimisi õigused (sh TRUNCATE, mis RLS-ist mööda läheb, ja anon-ligipääs) on eemaldatud. Alles on ainult SELECT, INSERT, UPDATE ja DELETE rollile `authenticated`.
+
+## Muudatuste ajalugu
+
+Tabel `audit_log` salvestab iga lisamise, muutmise ja kustutamise järgmistes tabelites: `indicator_results`, `indicators` (sh algtase ja siht), `activities`, `decisions`, `impact_analyses`, `evidence`, `goals`, `directions`, `direction_owners`, `status_rules`, `profiles`. Iga kirje juures on:
+
+- muutja (`changed_by`) ja aeg;
+- muutunud väljad;
+- vana ja uus väärtus;
+- arengusuund.
+
+Kirjutavad ainult triggerid, ridu ei saa muuta ega kustutada. Lugeda saavad koolijuht (kõike) ja vastutaja (oma suuna kohta).
+
+Näide: kõigi S1.1-T1 algtaseme ja sihi muudatuste pärimine:
+
+```sql
+select changed_at, changed_by, changed_fields, old_data, new_data
+from audit_log
+where table_name = 'indicators' and record_id = (select id from indicators where code = 'S1.1-T1')
+order by changed_at;
+```
+
+Kontrollitud testidega (`tests/db.test.ts`) PostgreSQL 15, 16 ja 17 peal.

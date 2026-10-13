@@ -16,3 +16,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Vormid kasutavad `ActionForm` komponenti (ei tühjenda vormi vea korral).
 - Kasutajaliides eesti keeles, identifikaatorid inglise keeles. Aasta 2027 = õppeaasta 2026/27 (`yearLabel`).
 - Kontroll enne commit'i: `npm run typecheck && npm run lint && npm test` (+ `TEST_DATABASE_URL=… npm test` värske `npm run db:local` andmebaasi vastu).
+- Uus tabel vajab migratsioonis: RLS + poliitikad (lugemine `is_member()`), `grant` rollile `authenticated` (mitte `anon`), vajadusel audit-trigger (`write_audit`). Security definer funktsioonid: `set search_path = ''` ja täielikult kvalifitseeritud nimed.
