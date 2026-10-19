@@ -1,6 +1,12 @@
+import "server-only";
+
 // Keskkonnamuutujad ühes kohas. Vt .env.example.
+// "server-only": see moodul (sh DATABASE_URL) ei saa kunagi sattuda brauseri koodi —
+// kui klientkomponent seda impordiks, katkeb ehitus veaga.
 export const env = {
   databaseUrl: process.env.DATABASE_URL ?? "",
+  /** Supabase'i CA-sertifikaat (PEM). Olemasolul kontrollitakse andmebaasi serveri sertifikaati. */
+  databaseCaCert: process.env.DATABASE_CA_CERT?.replace(/\\n/g, "\n") ?? "",
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
   supabaseKey:
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",

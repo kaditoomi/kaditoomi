@@ -64,11 +64,12 @@ Sisselogimislehel vali demokasutaja: koolijuht, ükskõik milline kolmest suuna 
    - SQL-is: `update profiles set role = 'admin', full_name = '…' where email = '…';`
 7. **Seadista** Authentication → URL Configuration → Redirect URLs: `https://<sinu-domeen>/auth/callback`.
 8. **Seadista Vercelis keskkonnamuutujad** (märgi `DATABASE_URL` tundlikuks, *Sensitive*):
-   - `DATABASE_URL`: Supabase → Connect → *Transaction pooler*. Asenda kasutajanimi `postgres.<ref>` kasutajaga `app_server.<ref>` ja parool punktis 5 määratuga. **Ära kasuta `postgres` kasutajat**: see möödub RLS-ist.
+   - `DATABASE_URL`: Supabase → Connect → *Transaction pooler* (port 6543). Asenda kasutajanimi `postgres.<ref>` kasutajaga `app_server.<ref>` ja parool punktis 5 määratuga. **Ära kasuta `postgres` kasutajat**: see möödub RLS-ist. Kujul: `postgres://app_server.<ref>:<parool>@aws-0-<regioon>.pooler.supabase.com:6543/postgres`. Kui paroolis on erimärke (`@ : / ? #`), kodeeri need (nt `encodeURIComponent`).
+   - `DATABASE_CA_CERT` (soovitatav, *Sensitive*): Supabase → Database → Settings → SSL Configuration → *Download certificate*; kleebi PEM-faili sisu. Siis kontrollib rakendus ka andmebaasi serveri sertifikaati. Ilma selleta on ühendus ikkagi krüpteeritud (TLS), kuid serveri identiteeti ei kontrollita.
    - `NEXT_PUBLIC_SUPABASE_URL`;
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (avalik võti, mitte *secret / service_role*).
 
-   `DEV_LOGIN` ja `ARUANDE_KUUPAEV` jäta seadistamata.
+   `DEV_LOGIN` ja `ARUANDE_KUUPAEV` jäta seadistamata. Supabase'is lülita sisse ka Database → Settings → SSL Configuration → *Enforce SSL on incoming connections*.
 9. **Koolijuht logib sisse** ja lisab **Seadetes** arengusuunad, vastutajad, andmeallikad ja reeglid. Uued kasutajad kutsutakse Supabase'is (*Invite user*); nad saavad rolli „vaatleja“, kuni koolijuht rolli muudab. Linnukese „Aktiivne“ eemaldamine peatab kasutaja ligipääsu kohe, kasutajat kustutamata.
 
 Kui kasutaja lisati Supabase'is ilma kutseta (*Create new user*), profiili ei teki ja ta ei näe midagi. Profiili saab siis lisada käsitsi:
@@ -87,6 +88,8 @@ Kui kasutaja lisati Supabase'is ilma kutseta (*Create new user*), profiili ei te
 npm run typecheck && npm run lint && npm test
 # andmebaasi- ja õigustestid (värskelt loodud kohaliku andmebaasi vastu):
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/arengukava npm test
+# Transaction pooleri testid (PgBouncer pool_mode=transaction või Supabase port 6543, kasutaja app_server):
+TEST_POOLER_URL="postgres://app_server:<parool>@<host>:6543/arengukava?sslmode=require" npm test
 ```
 
 ## Dokumentatsioon
