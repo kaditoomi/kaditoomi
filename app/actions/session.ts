@@ -19,18 +19,57 @@ export async function devLogin(formData: FormData) {
 }
 
 export async function sendMagicLink(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  if (!supabaseConfigured()) return { error: "Supabase pole seadistatud" };
+  if (!supabaseConfigured()) return { error: "Supabase pole seadistatud (NEXT_PUBLIC_SUPABASE_URL / KEY puudub)." };
   const email = String(formData.get("email") ?? "").trim();
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Sisesta korrektne e-posti aadress" };
-  const h = await headers();
-  const origin = h.get("origin") ?? `https://${h.get("host")}`;
-  const supabase = await createSupabaseServer();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${origin}/auth/callback`, shouldCreateUser: false },
-  });
-  if (error) return { error: "Sisselogimislinki ei saanud saata. Kas see aadress on kooli poolt lisatud?" };
-  return { ok: "Saatsime sisselogimislingi. Vaata oma postkasti." };
+
+  // Supabase'i aadress peab olema kujul https://<ref>.supabase.co (mitte dashboardi link ega andmebaasi host).
+  let supabaseHost = "";
+  try {
+    const u = new URL(env.supabaseUrl);
+    if (u.protocol !== "https:" && u.hostname !== "localhost") throw new Error("not https");
+    supabaseHost = u.hostname;
+  } catch {
+    console.error("NEXT_PUBLIC_SUPABASE_URL on vigane — peab olema kujul https://<ref>.supabase.co");
+    return {
+      error:
+        "Sisselogimine on valesti seadistatud: Supabase'i aadress (NEXT_PUBLIC_SUPABASE_URL) peab olema kujul https://<kood>.supabase.co.",
+    };
+  }
+  if (supabaseHost === "supabase.com" || supabaseHost.endsWith(".pooler.supabase.com")) {
+    console.error("NEXT_PUBLIC_SUPABASE_URL viitab dashboardile või andmebaasi poolerile, mitte projekti API-le");
+    return {
+      error:
+        "Sisselogimine on valesti seadistatud: NEXT_PUBLIC_SUPABASE_URL peab olema projekti aadress https://<kood>.supabase.co (Supabase → Connect → Project URL).",
+    };
+  }
+
+  try {
+    const h = await headers();
+    const origin = h.get("origin") ?? `https://${h.get("host")}`;
+    const supabase = await createSupabaseServer();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${origin}/auth/callback`, shouldCreateUser: false },
+    });
+    if (error) {
+      console.error("Sisselogimislingi saatmine ebaõnnestus:", error.status, error.code, error.message);
+      if (!error.status || /fetch failed/i.test(error.message)) {
+        return { error: "Supabase'iga ei saadud ühendust. Kontrolli, et Supabase'i projekt ei oleks peatatud, ja proovi uuesti." };
+      }
+      if (error.status === 429 || /rate limit/i.test(error.message)) {
+        return { error: "Liiga palju katseid. Supabase saadab tasuta paketis vaid paar kirja tunnis — proovi hiljem uuesti." };
+      }
+      if (error.status === 401 || /api key/i.test(error.message)) {
+        return { error: "Sisselogimine on valesti seadistatud: Supabase'i võti (NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) ei sobi." };
+      }
+      return { error: "Sisselogimislinki ei saanud saata. Kas see aadress on kooli poolt kutsutud?" };
+    }
+  } catch (e) {
+    console.error("Supabase Authiga ei saadud ühendust:", (e as Error).message);
+    return { error: "Supabase'iga ei saadud ühendust. Kontrolli, et Supabase'i projekt ei oleks peatatud, ja proovi uuesti." };
+  }
+  return { ok: "Saatsime sisselogimislingi. Vaata oma postkasti (ka rämpsposti)." };
 }
 
 export async function logout() {
