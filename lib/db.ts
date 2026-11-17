@@ -116,9 +116,10 @@ export async function asUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Pro
   if (!UUID.test(userId)) throw new Error("asUser: vigane kasutaja id");
   const claims = JSON.stringify({ sub: userId, role: "authenticated" });
   const result = await sql.begin(async (tx) => {
+    // Üks ringreis: väited + roll (set_config('role', …, true) = SET LOCAL ROLE).
     await tx`select set_config('request.jwt.claims', ${claims}, true),
-                    set_config('request.jwt.claim.sub', ${userId}, true)`;
-    await tx`set local role authenticated`;
+                    set_config('request.jwt.claim.sub', ${userId}, true),
+                    set_config('role', 'authenticated', true)`;
     return fn(tx);
   });
   return result as T;

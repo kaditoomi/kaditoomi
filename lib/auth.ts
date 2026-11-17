@@ -29,15 +29,18 @@ async function sessionUserId(): Promise<string | null> {
     return null;
   }
   if (!supabaseConfigured()) return null;
-  let data;
   try {
     const supabase = await createSupabaseServer();
-    ({ data } = await supabase.auth.getUser());
+    // getClaims kontrollib sisselogimistõendi allkirja (Supabase'i avalikud võtmed on
+    // puhverdatud), ilma et iga päring peaks Supabase Authi serverist üle küsima.
+    // Peatatud kasutaja blokeerib sõltumata sellest andmebaas (RLS: profiles.is_active).
+    const { data, error } = await supabase.auth.getClaims();
+    const sub = error ? null : data?.claims?.sub;
+    return typeof sub === "string" && /^[0-9a-f-]{36}$/i.test(sub) ? sub : null;
   } catch (e) {
     console.error("Supabase Auth ei vastanud või seadistus on vigane (NEXT_PUBLIC_SUPABASE_URL/KEY):", (e as Error).message);
     return null;
   }
-  return data.user?.id ?? null;
 }
 
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {

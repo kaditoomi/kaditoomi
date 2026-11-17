@@ -20,7 +20,8 @@ export async function proxy(request: NextRequest) {
         },
       },
     });
-    await supabase.auth.getUser();
+    // Värskendab aegunud sessiooni; kehtiva tõendi allkiri kontrollitakse kohapeal (kiire).
+    await supabase.auth.getClaims();
   } catch (e) {
     console.error(
       "Supabase'i sessiooni värskendamine ebaõnnestus. Kontrolli NEXT_PUBLIC_SUPABASE_URL (kujul https://<ref>.supabase.co) " +
