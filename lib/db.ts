@@ -31,12 +31,41 @@ function sslOption(url: string): { ssl?: postgres.Options<Record<string, never>>
   return { ssl: "require" };
 }
 
+/**
+ * Kontrollib DATABASE_URL-i ja annab arusaadava vea (parooli ei kuvata).
+ * Tavalised vead: Supabase'i "[YOUR-PASSWORD]" jäi asendamata, paroolis on
+ * kodeerimata erimärk või kasutati administraatorit "postgres".
+ */
+function checkedUrl(raw: string): string {
+  if (!raw) throw new Error("DATABASE_URL puudub (Vercel → Settings → Environment Variables).");
+  if (raw.includes("[YOUR-PASSWORD]") || /:\[[^\]]*\]@/.test(raw)) {
+    throw new Error("DATABASE_URL: parool on asendamata — kustuta nurksulud ja kirjuta nende asemele app_server parool.");
+  }
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error(
+      "DATABASE_URL on vigane. Kontrolli kuju postgresql://app_server.<ref>:<parool>@<host>:6543/postgres. " +
+        "Kui paroolis on märke @ : / ? # % või tühikuid, vaheta parool ainult tähtede ja numbrite peale.",
+    );
+  }
+  if (!/^postgres(ql)?:$/.test(url.protocol)) throw new Error("DATABASE_URL peab algama postgresql://");
+  const user = decodeURIComponent(url.username);
+  if (!LOCAL_HOSTS.has(url.hostname) && (user === "postgres" || user.startsWith("postgres."))) {
+    throw new Error(
+      "DATABASE_URL kasutab administraatorit postgres, mis möödub RLS-ist. Kasuta kasutajat app_server.<ref>.",
+    );
+  }
+  return raw.trim();
+}
+
 function createPool() {
-  if (!env.databaseUrl) throw new Error("DATABASE_URL puudub (vt .env.example)");
-  return postgres(env.databaseUrl, {
+  const url = checkedUrl(env.databaseUrl);
+  return postgres(url, {
     max: 5,
     prepare: false,
-    ...sslOption(env.databaseUrl),
+    ...sslOption(url),
     idle_timeout: 20, // serverivaba: vabasta jõudeolekus ühendused kiiresti
     max_lifetime: 60 * 30,
     connect_timeout: 10,
@@ -50,7 +79,23 @@ function createPool() {
   });
 }
 
-export const sql: postgres.Sql = globalForDb.__sql ?? (globalForDb.__sql = createPool());
+/** Ühendusbassein luuakse alles esimesel päringul (mitte mooduli laadimisel). */
+function pool(): postgres.Sql {
+  return globalForDb.__sql ?? (globalForDb.__sql = createPool());
+}
+
+// Kasutatakse nagu postgres.js-i sql-i (sql`...`, sql.begin, sql.end), kuid laisalt:
+// vigane seadistus ei kukuta enam kogu serverit ega ehitust, vaid annab vea päringul.
+export const sql = new Proxy(function () {} as unknown as postgres.Sql, {
+  apply: (_t, _this, args) => (pool() as unknown as (...a: unknown[]) => unknown)(...args),
+  get: (_t, prop) => {
+    // "then" (Promise kontroll) ja sümbolid ei tohi ühendust looma hakata.
+    if (prop === "then" || typeof prop === "symbol") return undefined;
+    const real = pool();
+    const v = Reflect.get(real, prop);
+    return typeof v === "function" ? v.bind(real) : v;
+  },
+});
 
 export type Tx = postgres.TransactionSql;
 
