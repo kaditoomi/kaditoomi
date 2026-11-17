@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "@fontsource-variable/figtree";
+import "@fontsource-variable/dm-sans";
 import "./globals.css";
 
 export const metadata: Metadata = {

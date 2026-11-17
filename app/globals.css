@@ -48,7 +48,8 @@
   --color-s-yellow-bg: var(--s-yellow-bg);
   --color-s-red-bg: var(--s-red-bg);
   --color-s-gray-bg: var(--s-gray-bg);
-  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Kooli brändifont DM Sans (logo pealkirjafont Telegraf vajab litsentsi; seni DM Sans paksem lõige). */
+  --font-sans: "DM Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 body {
