@@ -26,7 +26,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold">Juhtkonna vaade</h1>
+        <h1 className="text-2xl font-bold">Juhtkonna vaade</h1>
         <p className="text-sm text-ink-3">
           Õppeaasta {yearLabel(reportYear)} · seisuga {fmtDate(model.asOf)}
         </p>

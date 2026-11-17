@@ -4,7 +4,7 @@ import { STATUS_LABEL } from "@/lib/format";
 // Staatus kantakse alati ikooni kuju + sildiga, mitte ainult värviga.
 const STYLE: Record<Status, { fg: string; bg: string }> = {
   green: { fg: "text-s-green", bg: "bg-s-green-bg" },
-  yellow: { fg: "text-[#a86f00] dark:text-s-yellow", bg: "bg-s-yellow-bg" },
+  yellow: { fg: "text-[#9a6400]", bg: "bg-s-yellow-bg" },
   red: { fg: "text-s-red", bg: "bg-s-red-bg" },
   gray: { fg: "text-ink-3", bg: "bg-s-gray-bg" },
 };

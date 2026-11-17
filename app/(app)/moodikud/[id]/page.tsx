@@ -48,7 +48,7 @@ export default async function IndicatorPage({ params }: { params: Promise<{ id: 
           {i.code} · {KIND_LABEL[i.kind]} · {LEVEL_LABEL[i.impactLevel]} · {DIRECTION_LABEL[i.direction]} · {i.unit} · reegel{" "}
           {i.rule ? `${i.rule.name} (${i.rule.greenMinPct}/${i.rule.yellowMinPct})` : "vaikimisi 75/40"}
         </p>
-        <h1 className="mt-1 text-xl font-semibold">
+        <h1 className="mt-1 text-2xl font-bold">
           {i.isKey && <span title="Võtmenäitaja">★ </span>}
           {i.name}
         </h1>

@@ -8,7 +8,7 @@ export function YearSelect({ years, value }: { years: number[]; value: number })
   return (
     <form action={setReportYear} className="flex items-center gap-1.5 text-sm">
       <input type="hidden" name="back" value={pathname} />
-      <label htmlFor="aruandeaasta" className="text-ink-3">
+      <label htmlFor="aruandeaasta" className="text-white/75">
         Aruandeaasta
       </label>
       <select
@@ -16,7 +16,7 @@ export function YearSelect({ years, value }: { years: number[]; value: number })
         name="year"
         defaultValue={value}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="rounded-md border border-line bg-surface px-2 py-1 text-sm"
+        className="rounded-lg border border-white/25 bg-white/10 px-2 py-1 text-sm font-semibold text-white [&>option]:text-ink"
       >
         {years.map((y) => (
           <option key={y} value={y}>

@@ -20,7 +20,7 @@ export default async function NewIndicatorPage({ searchParams }: { searchParams:
       <Link href={`/suunad/${dir.code}`} className="text-sm text-ink-3 hover:underline">
         ← {dir.code}
       </Link>
-      <h1 className="text-xl font-semibold">Uus mõõdik</h1>
+      <h1 className="text-2xl font-bold">Uus mõõdik</h1>
       <p className="text-sm text-ink-2">
         Eesmärk: <strong>{goal.code}</strong> {goal.title}
       </p>

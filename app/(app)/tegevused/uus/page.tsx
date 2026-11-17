@@ -25,7 +25,7 @@ export default async function NewActivityPage({
       <Link href={`/suunad/${dir.code}#tegevused`} className="text-sm text-ink-3 hover:underline">
         ← {dir.code}
       </Link>
-      <h1 className="text-xl font-semibold">Uus tegevus</h1>
+      <h1 className="text-2xl font-bold">Uus tegevus</h1>
       <p className="text-sm text-ink-2">
         Eesmärk: <strong>{goal.code}</strong> {goal.title}
       </p>

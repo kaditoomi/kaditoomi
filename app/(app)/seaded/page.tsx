@@ -12,7 +12,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Seaded</h1>
+      <h1 className="text-2xl font-bold">Seaded</h1>
 
       <Section title="Kasutajad ja rollid">
         <p className="mb-3 text-sm text-ink-2">

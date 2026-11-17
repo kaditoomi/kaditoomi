@@ -29,7 +29,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         <p className="text-xs text-ink-3">
           Tegevus · {yearLabel(a.year)} · vastutaja {owner}
         </p>
-        <h1 className="mt-1 text-xl font-semibold">{a.title}</h1>
+        <h1 className="mt-1 text-2xl font-bold">{a.title}</h1>
         <p className="mt-1 text-sm">
           <span className={a.overdue ? "font-semibold text-s-red" : ""}>
             {a.overdue ? `⚠ Tähtaeg ületatud (${fmtDate(a.dueDate)})` : ACTIVITY_LABEL[a.status]}

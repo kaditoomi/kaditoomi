@@ -54,7 +54,7 @@ export default async function AnalysisPage({ params }: { params: Promise<{ code:
         ← {d.code} {d.title}
       </Link>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-2xl font-bold">
           {d.code} · Mõjuanalüüs {yearLabel(year)}
         </h1>
         <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-ink-2">

@@ -44,7 +44,7 @@ export default async function DirectionPage({ params }: { params: Promise<{ code
               <StatusBadge status={d.status} />
               <span className="text-xs text-ink-3">{d.statusReason}</span>
             </div>
-            <h1 className="mt-1 text-xl font-semibold leading-snug">{d.title}</h1>
+            <h1 className="mt-1 text-2xl font-bold leading-snug">{d.title}</h1>
             <p className="mt-1 text-sm text-ink-3">
               Vastutaja: {d.owners.map((o) => `${o.fullName}${o.isLead ? " (peavastutaja)" : ""}`).join(", ") || "määramata"}
               {!canEdit && " · sul on selle suuna kohta lugemisõigus"}
