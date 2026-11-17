@@ -29,8 +29,14 @@ async function sessionUserId(): Promise<string | null> {
     return null;
   }
   if (!supabaseConfigured()) return null;
-  const supabase = await createSupabaseServer();
-  const { data } = await supabase.auth.getUser();
+  let data;
+  try {
+    const supabase = await createSupabaseServer();
+    ({ data } = await supabase.auth.getUser());
+  } catch (e) {
+    console.error("Supabase Auth ei vastanud või seadistus on vigane (NEXT_PUBLIC_SUPABASE_URL/KEY):", (e as Error).message);
+    return null;
+  }
   return data.user?.id ?? null;
 }
 
