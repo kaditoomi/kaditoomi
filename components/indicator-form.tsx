@@ -1,5 +1,5 @@
 import { createIndicator, updateIndicator } from "@/app/actions/plan";
-import { DIRECTION_LABEL, KIND_LABEL, LEVEL_LABEL, yearLabel } from "@/lib/format";
+import { DIRECTION_LABEL, KIND_LABEL, LEVEL_LABEL, MONTH_LABEL, yearLabel } from "@/lib/format";
 import type { PlanModel } from "@/lib/model";
 import type { Indicator } from "@/lib/types";
 import { Field, Select, optionsFrom } from "./fields";
@@ -77,6 +77,23 @@ export function IndicatorForm({
         </Field>
         <Field label="Algtaseme märkus" className="md:col-span-2">
           <input name="baselineNote" defaultValue={i?.baselineNote ?? ""} className="input" />
+        </Field>
+      </fieldset>
+
+      <fieldset className="grid gap-3 rounded-md border border-line p-3 md:grid-cols-3">
+        <legend className="px-1 text-xs font-semibold text-ink-2">Mõõtmise aeg</legend>
+        <Field label="Tulemus saabub igal aastal (kuu lõpuks)" hint="Kuni see kuu pole möödas, on puuduv tulemus „ootab mõõtmist“, mitte puudus.">
+          <Select
+            name="measurementMonth"
+            options={MONTH_LABEL.map((m, n) => ({ value: n + 1, label: m }))}
+            defaultValue={i?.measurementMonth ?? 6}
+          />
+        </Field>
+        <Field label="Esimene mõõtmine (kui algtase puudub)" hint="nt 30.11.2027 — kuni selle kuupäevani on puuduv algtase „ootab mõõtmist“.">
+          <input type="date" name="firstMeasurementDue" defaultValue={i?.firstMeasurementDue ?? ""} className="input" />
+        </Field>
+        <Field label="Muutuse lävi" hint="Väiksem muutus = „muutuseta“. Tühi: skaalal 0,1, protsentides 2.">
+          <input name="changeThreshold" inputMode="decimal" defaultValue={i?.changeThreshold ?? ""} className="input" />
         </Field>
       </fieldset>
 

@@ -1,5 +1,5 @@
 import { createActivity, updateActivity } from "@/app/actions/plan";
-import { ACTIVITY_LABEL, yearLabel } from "@/lib/format";
+import { ACTIVITY_KIND_LABEL, ACTIVITY_LABEL, yearLabel } from "@/lib/format";
 import type { DirectionView, PlanModel } from "@/lib/model";
 import type { Activity } from "@/lib/types";
 import { Field, Select, optionsFrom } from "./fields";
@@ -51,6 +51,9 @@ export function ActivityForm({
         </Field>
         <Field label="Tähtaeg">
           <input type="date" name="dueDate" defaultValue={a?.dueDate ?? ""} className="input" />
+        </Field>
+        <Field label="Tegevuse tüüp" hint="Ühekordne valmib; praktika juurutamise mõju näitab seotud tulemusnäitaja.">
+          <Select name="kind" options={optionsFrom(ACTIVITY_KIND_LABEL)} defaultValue={a?.kind ?? "milestone"} />
         </Field>
         <Field label="Seis">
           <Select name="status" options={optionsFrom(ACTIVITY_LABEL)} defaultValue={a?.status ?? "planned"} />

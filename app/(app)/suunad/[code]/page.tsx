@@ -1,24 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createDecision, createGoal, deleteDecision, updateDirection, updateGoal } from "@/app/actions/plan";
+import { createDecision } from "@/app/actions/plan";
+import { ActivityQuickRow } from "@/components/activity-quick";
 import { Field, Select, optionsFrom } from "@/components/fields";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { IndicatorChartPicker } from "@/components/indicator-chart-picker";
-import { StatusBadge, StatusDot, StatusIcon } from "@/components/status";
+import { IndicatorHeader, IndicatorRow } from "@/components/indicator-row";
+import { StatusBadge } from "@/components/status";
 import { canEditDirection, requireUser } from "@/lib/auth";
 import { loadPlanModel } from "@/lib/data";
-import {
-  ACTIVITY_LABEL,
-  DECISION_LABEL,
-  GAP_LABEL,
-  KIND_LABEL,
-  LEVEL_LABEL,
-  fmtDate,
-  fmtNum,
-  yearLabel,
-} from "@/lib/format";
-import type { ActivityView, DirectionView, GoalView, IndicatorView } from "@/lib/model";
-import { chartSeries, statusForYear } from "@/lib/series";
+import { DECISION_LABEL, fmtDate, yearLabel } from "@/lib/format";
+import type { AttentionItem } from "@/lib/model";
+
+const ATTENTION_ICON: Record<AttentionItem["kind"], string> = { overdue: "⏰", declined: "↓", chain: "⚡", data: "!" };
 
 export default async function DirectionPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -27,9 +20,17 @@ export default async function DirectionPage({ params }: { params: Promise<{ code
   const d = model?.directions.find((x) => x.code === decodeURIComponent(code));
   if (!model || !d) notFound();
   const canEdit = canEditDirection(user, d.id);
-  const timelineYears = [model.plan.baselineYear, ...model.years];
+  const Y = model.reportYear;
+  const s = d.summary;
+  const outcomes = d.indicators.filter((i) => i.kind === "outcome");
   const process = d.indicators.filter((i) => i.kind === "process");
-  const outcome = d.indicators.filter((i) => i.kind === "outcome");
+  const yearActs = d.activities.filter((a) => a.year === Y || (a.overdue && a.year < Y));
+  const otherActs = d.activities.filter((a) => !yearActs.includes(a));
+  const profileName = (id: string | null) => model.profiles.find((p) => p.id === id)?.fullName ?? null;
+  const nextDue = d.indicators
+    .filter((i) => i.data.state === "waiting" && i.data.due)
+    .map((i) => i.data.due!)
+    .sort()[0];
 
   return (
     <div className="space-y-6">
@@ -39,485 +40,258 @@ export default async function DirectionPage({ params }: { params: Promise<{ code
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-3xl">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-ink-3">{d.code}</span>
-              <StatusBadge status={d.status} />
-              <span className="text-xs text-ink-3">{d.statusReason}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-ink-3">SUUND {d.code.replace(/^S/, "")}</span>
+              <StatusBadge
+                status={d.status}
+                label={d.status === "gray" ? (s.waiting > 0 ? "Ootab mõõtmist" : undefined) : undefined}
+                title={d.statusReason}
+              />
+              <span className="text-sm text-ink-3">Õppeaasta {yearLabel(Y)}</span>
             </div>
             <h1 className="mt-1 text-2xl font-bold leading-snug">{d.title}</h1>
-            <p className="mt-1 text-sm text-ink-3">
-              Vastutaja: {d.owners.map((o) => `${o.fullName}${o.isLead ? " (peavastutaja)" : ""}`).join(", ") || "määramata"}
-              {!canEdit && " · sul on selle suuna kohta lugemisõigus"}
-            </p>
+            {d.goals.length === 1 && <p className="mt-1 text-sm text-ink-2">Eesmärk: {d.goals[0].title}</p>}
+            <details className="mt-2 text-sm">
+              <summary className="link text-sm">Näita arengukava teksti (lähtekoht, soovitud muutus, mõju õppijale)</summary>
+              <dl className="mt-3 grid gap-4 md:grid-cols-3">
+                {[
+                  ["Lähtekoht", d.startingPoint],
+                  ["Soovitud muutus 2030", d.desiredChange],
+                  ["Mõju õppijale", d.learnerImpact],
+                ].map(([t, v]) => (
+                  <div key={t} className="card p-4">
+                    <dt className="h-section mb-1">{t}</dt>
+                    <dd className="whitespace-pre-line text-sm text-ink-2">{v || "—"}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
           </div>
-          <Link href={`/suunad/${d.code}/analuus/${model.reportYear}`} className="btn-primary">
-            Mõjuanalüüs {yearLabel(model.reportYear)}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/suunad/${d.code}/analuus/${Y}`} className="btn-primary">
+              Mõjuanalüüs {yearLabel(Y)}
+            </Link>
+            {canEdit && (
+              <Link href={`/seaded/suunad/${d.code}`} className="btn">
+                ⚙ Seadista
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
-      <section className="grid gap-3 md:grid-cols-3">
-        <InfoBox title="Lähtekoht">{d.startingPoint}</InfoBox>
-        <InfoBox title="Soovitud muutus">{d.desiredChange}</InfoBox>
-        <InfoBox title="Mõju õppijale">{d.learnerImpact}</InfoBox>
+      {/* Kokkuvõte: kolm numbrit */}
+      <section className="grid gap-4 md:grid-cols-3" aria-label="Kokkuvõte">
+        <Tile title={`Tegevuste seis ${yearLabel(Y)}`} href="#tegevused">
+          {s.activities.total === 0 ? (
+            <span className="text-ink-3">Sel õppeaastal tegevusi pole</span>
+          ) : (
+            <>
+              <b>{s.activities.done}</b> tehtud · <b>{s.activities.inProgress}</b> töös · <b>{s.activities.notStarted}</b> alustamata
+              {s.activities.postponed > 0 && <> · {s.activities.postponed} edasi lükatud</>}
+            </>
+          )}
+        </Tile>
+        <Tile title="Mõõdikute seis (viimane mõõtmine vs eelmine)" href="#tulemused">
+          <span className="text-[#0b7a3a]">
+            <b>{s.changes.improved}</b> paranenud
+          </span>{" "}
+          · <b>{s.changes.unchanged}</b> muutuseta ·{" "}
+          <span className="text-s-red">
+            <b>{s.changes.declined}</b> langenud
+          </span>
+          {s.waiting > 0 && (
+            <span className="mt-1 block text-xs text-ink-3">
+              {s.waiting} ootab mõõtmist{nextDue ? ` · järgmine ${fmtDate(nextDue)}` : ""}
+            </span>
+          )}
+        </Tile>
+        <Tile title="Tähelepanu vajab" href="#tahelepanu" accent={s.attention.length > 0}>
+          {s.attention.length === 0 ? (
+            <span className="text-[#0b7a3a]">Praegu mitte midagi</span>
+          ) : (
+            <>
+              <b>{s.attention.length}</b> {s.attention.length === 1 ? "küsimus" : "küsimust"}
+            </>
+          )}
+        </Tile>
       </section>
-      {canEdit && <DirectionEdit d={d} />}
 
-      {d.gaps.length > 0 && (
-        <section className="card border-dashed p-4">
-          <h2 className="mb-2 text-sm font-semibold">Andmelüngad ({d.gaps.length})</h2>
-          <ul className="space-y-1 text-sm">
-            {d.gaps.map((g, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <StatusIcon status="gray" />
-                <span>
-                  <span className="mr-1 font-medium">{GAP_LABEL[g.gapType]}:</span>
-                  {g.message}
-                </span>
+      {s.attention.length > 0 && (
+        <section id="tahelepanu" className="card border-s-yellow/50 p-5">
+          <h2 className="mb-2 text-base font-bold">Tähelepanu vajab</h2>
+          <ul className="divide-y divide-line">
+            {s.attention.map((a, n) => (
+              <li key={n}>
+                <Link href={a.href} className="flex items-start gap-3 rounded-lg px-1 py-2.5 hover:bg-surface-2">
+                  <span aria-hidden="true" className="w-5 shrink-0 text-center font-bold text-[#9a6400]">
+                    {ATTENTION_ICON[a.kind]}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-medium">{a.text}</span>
+                    <span className="block text-sm text-ink-3">{a.detail}</span>
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      <section className="card overflow-x-auto p-4" aria-labelledby="ajajoon">
-        <h2 id="ajajoon" className="mb-3 text-sm font-semibold">
-          Ajajoon {model.plan.startYear}–{model.plan.endYear}
-        </h2>
-        <table className="w-full min-w-[960px] table-fixed border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="w-52 border-b border-line py-1.5 text-left text-xs font-medium text-ink-3" />
-              {timelineYears.map((y) => (
-                <th
-                  key={y}
-                  className={`border-b border-line px-2 py-1.5 text-left text-xs font-medium ${y === model.reportYear ? "bg-surface-2 text-ink" : "text-ink-3"}`}
-                >
-                  {yearLabel(y)}
-                  {y === model.plan.baselineYear && " (algtase)"}
-                </th>
-              ))}
-              <th className="w-20 border-b border-line px-2 py-1.5 text-left text-xs font-medium text-ink-3">Siht</th>
-            </tr>
-          </thead>
-          <tbody>
-            <TimelineGroup cols={timelineYears.length + 2} label="Planeeritud tegevused" />
-            <tr>
-              <td className="border-b border-line py-2 pr-2 align-top text-xs text-ink-3">kavandatud aasta järgi</td>
-              {timelineYears.map((y) => (
-                <td key={y} className={`border-b border-line px-2 py-2 align-top ${y === model.reportYear ? "bg-surface-2" : ""}`}>
-                  <ul className="space-y-1">
-                    {d.activities
-                      .filter((a) => a.year === y)
-                      .map((a) => (
-                        <li key={a.id} className="text-xs leading-snug">
-                          <Link href={`/tegevused/${a.id}`} className="hover:underline">
-                            <ActivityMark a={a} /> {a.title}
-                          </Link>
-                        </li>
-                      ))}
-                  </ul>
-                </td>
-              ))}
-              <td className="border-b border-line" />
-            </tr>
-            <TimelineGroup cols={timelineYears.length + 2} label="Protsessinäitajad" />
-            {process.map((i) => (
-              <IndicatorTimelineRow key={i.id} i={i} years={timelineYears} reportYear={model.reportYear} />
-            ))}
-            <TimelineGroup cols={timelineYears.length + 2} label="Tulemusnäitajad" />
-            {outcome.map((i) => (
-              <IndicatorTimelineRow key={i.id} i={i} years={timelineYears} reportYear={model.reportYear} />
-            ))}
-            <TimelineGroup cols={timelineYears.length + 2} label="Vahehinnangud" />
-            <tr>
-              <td className="border-b border-line py-2 text-xs text-ink-3">aasta mõjuanalüüs</td>
-              {timelineYears.map((y) => {
-                const a = d.analyses.find((x) => x.year === y);
-                return (
-                  <td key={y} className={`border-b border-line px-2 py-2 text-xs ${y === model.reportYear ? "bg-surface-2" : ""}`}>
-                    {y >= model.plan.startYear && (
-                      <Link href={`/suunad/${d.code}/analuus/${y}`} className="link">
-                        {a ? (a.status === "approved" ? "◆ kinnitatud" : "◇ mustand") : y <= model.reportYear ? "+ koosta" : ""}
-                      </Link>
-                    )}
-                  </td>
-                );
-              })}
-              <td className="border-b border-line" />
-            </tr>
-            <TimelineGroup cols={timelineYears.length + 2} label="Muudatused tegevuskavas" />
-            <tr>
-              <td className="py-2 text-xs text-ink-3">otsused (kehtivad aastast)</td>
-              {timelineYears.map((y) => (
-                <td key={y} className={`px-2 py-2 align-top ${y === model.reportYear ? "bg-surface-2" : ""}`}>
-                  <ul className="space-y-1">
-                    {d.decisions
-                      .filter((x) => (x.effectiveYear ?? Number(x.decidedOn.slice(0, 4))) === y)
-                      .map((x) => (
-                        <li key={x.id} className="text-xs leading-snug">
-                          <span className="font-semibold uppercase text-accent-ink">{DECISION_LABEL[x.kind]}</span> {x.title}
-                        </li>
-                      ))}
-                  </ul>
-                </td>
-              ))}
-              <td />
-            </tr>
-          </tbody>
-        </table>
-        <p className="mt-2 text-xs text-ink-3">
-          Tegevused: ✓ tehtud · ▶ töös · ○ planeeritud · ⏸ edasi lükatud · ✕ loobutud · <span className="text-s-red">⚠ tähtaeg ületatud</span>
-        </p>
-      </section>
-
-      <section className="card p-4">
-        <h2 className="mb-3 text-sm font-semibold">Trend</h2>
-        <IndicatorChartPicker series={d.indicators.map(chartSeries)} reportYear={model.reportYear} />
-      </section>
-
-      <section className="space-y-4" id="tegevused">
-        <h2 className="text-base font-semibold">Eesmärgid, mõõdikud ja tegevused</h2>
-        {d.goals.map((g) => (
-          <GoalSection key={g.id} g={g} canEdit={canEdit} reportYear={model.reportYear} />
-        ))}
-        {canEdit && (
-          <details className="card p-4">
-            <summary className="cursor-pointer text-sm font-medium">+ Lisa eesmärk</summary>
-            <ActionForm action={createGoal} className="mt-3 grid gap-3 md:grid-cols-2" resetOnSuccess>
-              <input type="hidden" name="directionId" value={d.id} />
-              <Field label="Kood">
-                <input name="code" className="input" required placeholder={`${d.code}.${d.goals.length + 1}`} />
-              </Field>
-              <Field label="Eesmärk">
-                <input name="title" className="input" required />
-              </Field>
-              <Field label="Soovitud muutus">
-                <textarea name="desiredChange" className="input" rows={2} />
-              </Field>
-              <Field label="Mõju õppijale">
-                <textarea name="learnerImpact" className="input" rows={2} />
-              </Field>
-              <div>
-                <SubmitButton>Lisa eesmärk</SubmitButton>
-              </div>
-            </ActionForm>
-          </details>
-        )}
-      </section>
-
-      <section className="card p-4" id="otsused">
-        <h2 className="mb-2 text-sm font-semibold">Juhtimisotsused ja tegevuskava muudatused</h2>
-        {d.decisions.length === 0 && <p className="text-sm text-ink-3">Otsuseid pole.</p>}
+      {/* A. Kuidas meil läheb? */}
+      <section id="tulemused" className="card p-5">
+        <SectionTitle letter="A" title="Kuidas meil läheb?" hint="Tulemusnäitajad: algtase, viimane mõõtmine ja siht. Klõpsa mõõdikul, et näha trendi ja lisada tulemus." />
+        <IndicatorHeader />
         <ul className="divide-y divide-line">
-          {d.decisions.map((x) => {
-            const ind = x.indicatorId ? d.indicators.find((i) => i.id === x.indicatorId) : null;
-            return (
-              <li key={x.id} className="flex items-start gap-3 py-2.5 text-sm">
-                <div className="w-24 shrink-0 text-xs text-ink-3">{fmtDate(x.decidedOn)}</div>
-                <div className="min-w-0 flex-1">
-                  <p>
-                    <span className="mr-1.5 text-xs font-semibold uppercase text-accent-ink">{DECISION_LABEL[x.kind]}</span>
-                    {x.title}
-                  </p>
-                  {x.rationale && <p className="mt-0.5 text-xs text-ink-2">Põhjendus: {x.rationale}</p>}
-                  <p className="mt-0.5 text-xs text-ink-3">
-                    {x.effectiveYear ? `Kehtib alates ${yearLabel(x.effectiveYear)}` : ""}
-                    {ind && (
-                      <>
-                        {" · "}
-                        <Link href={`/moodikud/${ind.id}`} className="link">
-                          {ind.code}
-                        </Link>
-                      </>
-                    )}
-                  </p>
-                </div>
-                {canEdit && (
-                  <ActionForm action={deleteDecision} confirm="Kustutada otsus?">
-                    <input type="hidden" name="id" value={x.id} />
-                    <SubmitButton variant="danger" small>
-                      Kustuta
-                    </SubmitButton>
-                  </ActionForm>
-                )}
-              </li>
-            );
-          })}
+          {outcomes.map((i) => (
+            <IndicatorRow key={i.id} i={i} />
+          ))}
+          {outcomes.length === 0 && <li className="py-3 text-sm text-ink-3">Tulemusnäitajaid pole veel seadistatud.</li>}
         </ul>
-        {canEdit && (
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm font-medium">+ Lisa otsus</summary>
-            <ActionForm action={createDecision} className="mt-3 grid gap-3 md:grid-cols-4" resetOnSuccess>
-              <input type="hidden" name="directionId" value={d.id} />
-              <Field label="Kuupäev">
-                <input type="date" name="decidedOn" defaultValue={model.asOf} className="input" required />
-              </Field>
-              <Field label="Otsus">
-                <Select name="kind" options={optionsFrom(DECISION_LABEL)} defaultValue="change" />
-              </Field>
-              <Field label="Kehtib õppeaastast">
-                <Select
-                  name="effectiveYear"
-                  empty="—"
-                  defaultValue={Math.min(model.reportYear + 1, model.plan.endYear)}
-                  options={model.years.map((y) => ({ value: y, label: yearLabel(y) }))}
-                />
-              </Field>
-              <Field label="Seotud mõõdik">
-                <Select
-                  name="indicatorId"
-                  empty="—"
-                  options={d.indicators.map((i) => ({ value: i.id, label: `${i.code} ${i.name}` }))}
-                />
-              </Field>
-              <Field label="Otsus lühidalt" className="md:col-span-2">
-                <input name="title" className="input" required />
-              </Field>
-              <Field label="Põhjendus (millele otsus tugineb)" className="md:col-span-2">
-                <input name="rationale" className="input" />
-              </Field>
-              <div>
-                <SubmitButton>Lisa otsus</SubmitButton>
-              </div>
-            </ActionForm>
+        {process.length > 0 && (
+          <details className="mt-4 border-t border-line pt-3">
+            <summary className="link text-sm">Protsessinäitajad ({process.length}): kas praktika muutub</summary>
+            <ul className="mt-2 divide-y divide-line">
+              {process.map((i) => (
+                <IndicatorRow key={i.id} i={i} />
+              ))}
+            </ul>
           </details>
         )}
       </section>
-    </div>
-  );
-}
 
-function InfoBox({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="card p-3">
-      <p className="h-section mb-1">{title}</p>
-      <p className="text-sm text-ink-2">{children || "—"}</p>
-    </div>
-  );
-}
-
-function TimelineGroup({ label, cols }: { label: string; cols: number }) {
-  return (
-    <tr>
-      <th colSpan={cols} className="pb-1 pt-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-3">
-        {label}
-      </th>
-    </tr>
-  );
-}
-
-function IndicatorTimelineRow({ i, years, reportYear }: { i: IndicatorView; years: number[]; reportYear: number }) {
-  return (
-    <tr>
-      <td className="border-b border-line py-1.5 pr-2 align-top text-xs">
-        <Link href={`/moodikud/${i.id}`} className="hover:underline">
-          {i.isKey && <span title="Võtmenäitaja">★ </span>}
-          {i.name}
-        </Link>
-        <span className="block text-ink-3">{i.source?.name ?? "allikas määramata"}</span>
-      </td>
-      {years.map((y) => {
-        const isBase = y === i.baselineYear;
-        const r = i.results.find((x) => x.year === y);
-        const value = isBase ? i.baselineValue : r?.value;
-        const st = !isBase && r ? statusForYear(i, y) : null;
-        return (
-          <td key={y} className={`border-b border-line px-2 py-1.5 align-top tabular-nums ${y === reportYear ? "bg-surface-2" : ""}`}>
-            {value != null ? (
-              <span className="inline-flex items-center gap-1">
-                {st && <StatusDot status={st} />}
-                {fmtNum(value)}
-              </span>
-            ) : y === reportYear ? (
-              <span className="inline-flex items-center gap-1 text-xs text-ink-3">
-                <StatusDot status="gray" /> puudub
-              </span>
-            ) : (
-              ""
-            )}
-          </td>
-        );
-      })}
-      <td className="border-b border-line px-2 py-1.5 align-top tabular-nums">
-        {fmtNum(i.targetValue)} <span className="text-xs text-ink-3">{i.unit}</span>
-      </td>
-    </tr>
-  );
-}
-
-function ActivityMark({ a }: { a: ActivityView }) {
-  if (a.overdue) return <span className="text-s-red" title="Tähtaeg ületatud">⚠</span>;
-  const m = { done: "✓", in_progress: "▶", planned: "○", postponed: "⏸", cancelled: "✕" }[a.status];
-  return <span title={ACTIVITY_LABEL[a.status]}>{m}</span>;
-}
-
-function DirectionEdit({ d }: { d: DirectionView }) {
-  return (
-    <details className="card p-4">
-      <summary className="cursor-pointer text-sm font-medium">✎ Muuda arengusuuna kirjeldust</summary>
-      <ActionForm action={updateDirection} className="mt-3 grid gap-3">
-        <input type="hidden" name="id" value={d.id} />
-        <Field label="Eesmärgi nimetus">
-          <input name="title" defaultValue={d.title} className="input" required />
-        </Field>
-        <div className="grid gap-3 md:grid-cols-3">
-          <Field label="Lähtekoht">
-            <textarea name="startingPoint" defaultValue={d.startingPoint ?? ""} rows={4} className="input" />
-          </Field>
-          <Field label="Soovitud muutus">
-            <textarea name="desiredChange" defaultValue={d.desiredChange ?? ""} rows={4} className="input" />
-          </Field>
-          <Field label="Mõju õppijale">
-            <textarea name="learnerImpact" defaultValue={d.learnerImpact ?? ""} rows={4} className="input" />
-          </Field>
+      {/* B. Mida oleme teinud? */}
+      <section id="tegevused" className="card p-5">
+        <SectionTitle
+          letter="B"
+          title="Mida oleme teinud?"
+          hint={canEdit ? `Tegevused ${yearLabel(Y)}. Klõpsa tegevusel, et seisu uuendada.` : `Tegevused ${yearLabel(Y)}.`}
+        />
+        <div className="hidden gap-x-4 border-b border-line px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-3 sm:grid sm:grid-cols-[minmax(0,1fr)_10rem_7rem_11rem]">
+          <span>Tegevus</span>
+          <span>Vastutaja</span>
+          <span>Tähtaeg</span>
+          <span>Seis</span>
         </div>
-        <div>
-          <SubmitButton>Salvesta</SubmitButton>
-        </div>
-      </ActionForm>
-    </details>
-  );
-}
-
-function GoalSection({ g, canEdit, reportYear }: { g: GoalView; canEdit: boolean; reportYear: number }) {
-  const hasOutcome = g.indicators.some((i) => i.kind === "outcome");
-  return (
-    <article className="card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="max-w-3xl">
-          <h3 className="font-semibold">
-            <span className="text-ink-3">{g.code}</span> {g.title}
-          </h3>
-          {(g.desiredChange || g.learnerImpact) && (
-            <p className="mt-0.5 text-sm text-ink-2">
-              {g.desiredChange && <>Soovitud muutus: {g.desiredChange} </>}
-              {g.learnerImpact && <>· Mõju õppijale: {g.learnerImpact}</>}
-            </p>
-          )}
-        </div>
-        {canEdit && (
-          <div className="flex gap-2">
-            <Link href={`/moodikud/uus?eesmark=${g.id}`} className="btn btn-sm">
-              + Mõõdik
-            </Link>
-            <Link href={`/tegevused/uus?eesmark=${g.id}`} className="btn btn-sm">
-              + Tegevus
-            </Link>
-          </div>
+        <ul className="divide-y divide-line">
+          {yearActs.map((a) => (
+            <ActivityQuickRow key={a.id} a={a} canEdit={canEdit} showYear={a.year !== Y} />
+          ))}
+          {yearActs.length === 0 && <li className="px-2 py-3 text-sm text-ink-3">Õppeaastal {yearLabel(Y)} tegevusi pole.</li>}
+        </ul>
+        {otherActs.length > 0 && (
+          <details className="mt-3 border-t border-line pt-3">
+            <summary className="link text-sm">Teiste õppeaastate tegevused ({otherActs.length})</summary>
+            <ul className="mt-2 divide-y divide-line">
+              {otherActs
+                .sort((a, b) => a.year - b.year)
+                .map((a) => (
+                  <ActivityQuickRow key={a.id} a={a} canEdit={canEdit} showYear />
+                ))}
+            </ul>
+          </details>
         )}
-      </div>
+      </section>
 
-      {g.chainBreak && (
-        <p className="mt-2 rounded-md bg-s-red-bg px-2.5 py-1.5 text-sm">
-          ⚡ Praktika muutus, kuid õppija tulemus mitte — vaata üle, kas tegevus jõuab õppijani.
-        </p>
-      )}
-      {!hasOutcome && (
-        <p className="mt-2 flex items-center gap-2 rounded-md border border-dashed border-line px-2.5 py-1.5 text-sm text-ink-2">
-          <StatusIcon status="gray" /> Mõõdik puudub → vaja luua tulemusnäitaja ja algtaseme mõõtmine.
-          {canEdit && (
-            <Link href={`/moodikud/uus?eesmark=${g.id}`} className="link">
-              Loo mõõdik
-            </Link>
-          )}
-        </p>
-      )}
-
-      {g.indicators.length > 0 && (
-        <div className="mt-3 overflow-x-auto">
-          <table className="table-basic min-w-[760px]">
-            <thead>
-              <tr>
-                <th>Mõõdik</th>
-                <th>Tüüp / tasand</th>
-                <th>Allikas</th>
-                <th className="text-right">Algtase</th>
-                <th className="text-right">{yearLabel(reportYear)}</th>
-                <th className="text-right">Siht</th>
-                <th>Staatus</th>
-              </tr>
-            </thead>
-            <tbody>
-              {g.indicators.map((i) => (
-                <tr key={i.id}>
-                  <td>
-                    <Link href={`/moodikud/${i.id}`} className="link">
-                      {i.isKey && "★ "}
-                      {i.name}
-                    </Link>
-                    <span className="block text-xs text-ink-3">{i.code}</span>
-                  </td>
-                  <td className="text-xs text-ink-2">
-                    {KIND_LABEL[i.kind]}
-                    <span className="block text-ink-3">{LEVEL_LABEL[i.impactLevel]}</span>
-                  </td>
-                  <td className="text-xs text-ink-2">{i.source?.name ?? "—"}</td>
-                  <td className="text-right tabular-nums">
-                    {fmtNum(i.baselineValue)}
-                    {i.baselineYear && <span className="block text-xs text-ink-3">{yearLabel(i.baselineYear)}</span>}
-                  </td>
-                  <td className="text-right tabular-nums">{fmtNum(i.evaluation.value)}</td>
-                  <td className="text-right tabular-nums">
-                    {fmtNum(i.targetValue)} <span className="text-xs text-ink-3">{i.unit}</span>
-                  </td>
-                  <td>
-                    <StatusBadge status={i.evaluation.status} title={i.evaluation.reason} />
-                    <span className="mt-0.5 block max-w-56 text-xs text-ink-3">{i.evaluation.reason}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="mt-3">
-        <p className="h-section mb-1">Tegevused</p>
-        {g.activities.length === 0 ? (
-          <p className="text-sm text-ink-3">Tegevusi pole.</p>
+      {/* C. Mida otsustame? */}
+      <section id="otsused" className="card p-5">
+        <SectionTitle letter="C" title="Mida otsustame?" hint="Juhtimisotsused: mida jätkame, muudame või millest loobume, kes vastutab ja milleks." />
+        {d.decisions.length === 0 ? (
+          <p className="text-sm text-ink-3">Otsuseid pole veel tehtud.</p>
         ) : (
           <ul className="divide-y divide-line">
-            {g.activities.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-baseline justify-between gap-2 py-1.5 text-sm">
-                <Link href={`/tegevused/${a.id}`} className="link">
-                  <ActivityMark a={a} /> {a.title}
-                </Link>
-                <span className="text-xs text-ink-3">
-                  {yearLabel(a.year)} · tähtaeg {fmtDate(a.dueDate)} ·{" "}
-                  <span className={a.overdue ? "font-medium text-s-red" : ""}>
-                    {a.overdue ? "tähtaeg ületatud" : ACTIVITY_LABEL[a.status]}
-                  </span>
-                </span>
-              </li>
+            {d.decisions.slice(0, 3).map((x) => (
+              <DecisionItem key={x.id} x={x} owner={profileName(x.ownerId)} />
             ))}
           </ul>
         )}
-      </div>
+        {d.decisions.length > 3 && (
+          <details className="mt-2">
+            <summary className="link text-sm">Varasemad otsused ({d.decisions.length - 3})</summary>
+            <ul className="divide-y divide-line">
+              {d.decisions.slice(3).map((x) => (
+                <DecisionItem key={x.id} x={x} owner={profileName(x.ownerId)} />
+              ))}
+            </ul>
+          </details>
+        )}
+        {canEdit && (
+          <details className="mt-4 rounded-lg border border-line p-4">
+            <summary className="font-semibold text-accent-ink">+ Lisa otsus</summary>
+            <ActionForm action={createDecision} className="mt-4 grid gap-3 md:grid-cols-4" resetOnSuccess>
+              <input type="hidden" name="directionId" value={d.id} />
+              <input type="hidden" name="decidedOn" value={model.asOf} />
+              <Field label="Otsus" className="md:col-span-4">
+                <input name="title" className="input" required placeholder="nt Muudame ainevaldkondade koostöökorraldust, et leida ühine planeerimisaeg" />
+              </Field>
+              <Field label="Põhjendus (millele otsus tugineb)" className="md:col-span-4">
+                <input name="rationale" className="input" placeholder="nt Õpioskuste arenguplaani rakendamine vajab ühist planeerimisaega" />
+              </Field>
+              <Field label="Vastutaja">
+                <Select
+                  name="ownerId"
+                  empty="—"
+                  options={model.profiles.filter((p) => p.role !== "viewer").map((p) => ({ value: p.id, label: p.fullName }))}
+                />
+              </Field>
+              <Field label="Tähtaeg">
+                <input type="date" name="dueDate" className="input" />
+              </Field>
+              <Field label="Liik">
+                <Select name="kind" options={optionsFrom(DECISION_LABEL)} defaultValue="change" />
+              </Field>
+              <Field label="Seotud mõõdik (valikuline)">
+                <Select name="indicatorId" empty="—" options={d.indicators.map((i) => ({ value: i.id, label: i.name }))} />
+              </Field>
+              <div className="md:col-span-4">
+                <SubmitButton>Salvesta otsus</SubmitButton>
+              </div>
+            </ActionForm>
+          </details>
+        )}
+      </section>
+    </div>
+  );
+}
 
-      {canEdit && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs text-ink-3">✎ Muuda eesmärki</summary>
-          <ActionForm action={updateGoal} className="mt-2 grid gap-3 md:grid-cols-2">
-            <input type="hidden" name="id" value={g.id} />
-            <Field label="Kood">
-              <input name="code" defaultValue={g.code} className="input" required />
-            </Field>
-            <Field label="Eesmärk">
-              <input name="title" defaultValue={g.title} className="input" required />
-            </Field>
-            <Field label="Soovitud muutus">
-              <textarea name="desiredChange" defaultValue={g.desiredChange ?? ""} className="input" rows={2} />
-            </Field>
-            <Field label="Mõju õppijale">
-              <textarea name="learnerImpact" defaultValue={g.learnerImpact ?? ""} className="input" rows={2} />
-            </Field>
-            <div>
-              <SubmitButton>Salvesta</SubmitButton>
-            </div>
-          </ActionForm>
-        </details>
-      )}
-    </article>
+function Tile({ title, href, accent, children }: { title: string; href: string; accent?: boolean; children: React.ReactNode }) {
+  return (
+    <a href={href} className={`card block p-4 transition hover:border-accent/40 ${accent ? "border-s-yellow/60 bg-s-yellow-bg/40" : ""}`}>
+      <p className="h-section mb-1.5">{title}</p>
+      <p className="text-[15px] leading-relaxed">{children}</p>
+    </a>
+  );
+}
+
+function SectionTitle({ letter, title, hint }: { letter: string; title: string; hint: string }) {
+  return (
+    <div className="mb-3 flex items-start gap-3">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-logo-blue text-sm font-bold text-brand">{letter}</span>
+      <div>
+        <h2 className="text-lg font-bold leading-tight">{title}</h2>
+        <p className="text-sm text-ink-3">{hint}</p>
+      </div>
+    </div>
+  );
+}
+
+function DecisionItem({
+  x,
+  owner,
+}: {
+  x: { id: string; decidedOn: string; kind: keyof typeof DECISION_LABEL; title: string; rationale: string | null; dueDate: string | null };
+  owner: string | null;
+}) {
+  return (
+    <li className="py-3">
+      <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-ink-3">
+        <span>{fmtDate(x.decidedOn)}</span>
+        <span className="font-bold uppercase text-accent-ink">{DECISION_LABEL[x.kind]}</span>
+        {owner && <span>· vastutaja {owner}</span>}
+        {x.dueDate && <span>· tähtaeg {fmtDate(x.dueDate)}</span>}
+      </div>
+      <p className="mt-0.5 font-medium">{x.title}</p>
+      {x.rationale && <p className="text-sm text-ink-2">{x.rationale}</p>}
+    </li>
   );
 }

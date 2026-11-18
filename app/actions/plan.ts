@@ -114,10 +114,14 @@ const indicatorShape = {
   isKey: fBool,
   ownerId: fUuidOrNull,
   description: fText,
+  measurementMonth: fInt.pipe(z.number().int().min(1).max(12).nullable()),
+  firstMeasurementDue: fDate,
+  changeThreshold: fNumber.pipe(z.number().min(0).nullable()),
 };
 
 function checkIndicator(i: z.infer<z.ZodObject<typeof indicatorShape>>) {
   if (i.baselineValue != null && i.baselineYear == null) throw new UserError("Algtasemel peab olema aasta");
+  if (i.measurementMonth == null) i.measurementMonth = 6;
   if (i.baselineValue == null) i.baselineYear = null;
   return { ...i, targetYear: i.targetYear ?? 2030 };
 }
@@ -237,6 +241,7 @@ const activityShape = {
   status: z.enum(["planned", "in_progress", "done", "postponed", "cancelled"]),
   completedOn: fDate,
   outcomeNote: fText,
+  kind: z.preprocess((v) => (v == null || v === "" ? "milestone" : v), z.enum(["milestone", "practice"])),
 };
 
 function checkActivity(a: z.infer<z.ZodObject<typeof activityShape>>) {
@@ -275,6 +280,28 @@ export async function updateActivity(_p: ActionState, fd: FormData): Promise<Act
   });
 }
 
+/** Igapäevane sissekanne: ainult seis, toimumise kuupäev ja lühike kommentaar. */
+export async function updateActivityStatus(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return mutate(async (tx) => {
+    const a = parseForm(
+      {
+        id: fUuid,
+        status: z.enum(["planned", "in_progress", "done", "postponed", "cancelled"]),
+        completedOn: fDate,
+        outcomeNote: fText,
+      },
+      fd,
+    );
+    if (a.status === "done" && !a.completedOn) a.completedOn = new Date().toISOString().slice(0, 10);
+    if (a.status !== "done") a.completedOn = null;
+    expectRows(
+      await tx`update activities set status = ${a.status}, completed_on = ${a.completedOn},
+               outcome_note = coalesce(${a.outcomeNote}, outcome_note) where id = ${a.id}`,
+    );
+    return "Seis uuendatud";
+  });
+}
+
 export async function deleteActivity(_p: ActionState, fd: FormData): Promise<ActionState> {
   let back: string | null = null;
   const res = await mutate(async (tx) => {
@@ -306,6 +333,7 @@ export async function createDecision(_p: ActionState, fd: FormData): Promise<Act
         rationale: fText,
         effectiveYear: fInt,
         ownerId: fUuidOrNull,
+        dueDate: fDate,
       },
       fd,
     );

@@ -91,3 +91,29 @@ export const GAP_LABEL = {
   no_target: "Siht puudub",
   no_current_result: "Tulemus sisestamata",
 } as const;
+
+/** Tegevuse seisu nimetus sõltub tüübist: ühekordne tegevus valmib, praktika rakendub. */
+export function activityStatusLabel(kind: "milestone" | "practice", status: ActivityStatus): string {
+  if (status === "planned") return "Alustamata";
+  if (status === "postponed") return "Edasi lükatud";
+  if (status === "cancelled") return "Loobutud";
+  if (kind === "practice") return status === "done" ? "Rakendunud" : "Rakendamisel";
+  return status === "done" ? "Valmis" : "Töös";
+}
+
+export const ACTIVITY_KIND_LABEL = {
+  milestone: "Ühekordne",
+  practice: "Praktika juurutamine",
+} as const;
+
+/** Vastutaja nimi või arengukavas nimetatud roll ("Vastutaja: õppejuht." kirjelduses). */
+export function responsibleLabel(ownerName: string | null, description: string | null): string {
+  if (ownerName) return ownerName;
+  const m = description?.match(/Vastutaja:\s*([^.]+)\./);
+  return m ? m[1].trim() : "—";
+}
+
+export const MONTH_LABEL = [
+  "jaanuar", "veebruar", "märts", "aprill", "mai", "juuni",
+  "juuli", "august", "september", "oktoober", "november", "detsember",
+];

@@ -200,3 +200,64 @@ describe("chainBreak", () => {
     ).toBe(false);
   });
 });
+
+import { changeOf, dataState, defaultThreshold, resultDueDate } from "./status";
+
+describe("changeOf", () => {
+  it("skaalal alla 0,1 on muutuseta, 0,1 ja üle on muutus", () => {
+    expect(changeOf(3.1, 3.12, "increase", 0.1)).toBe("unchanged");
+    expect(changeOf(3.2, 3.3, "increase", 0.1)).toBe("improved");
+    expect(changeOf(3.3, 3.2, "increase", 0.1)).toBe("declined");
+  });
+  it("protsentides alla 2 p.p. on muutuseta", () => {
+    expect(changeOf(14.2, 14.6, "decrease", 2)).toBe("unchanged");
+    expect(changeOf(14.6, 18.7, "decrease", 2)).toBe("declined");
+    expect(changeOf(18.7, 15.0, "decrease", 2)).toBe("improved");
+  });
+  it("vaikimisi lävi ühiku järgi", () => {
+    expect(defaultThreshold("%")).toBe(2);
+    expect(defaultThreshold("% nõus")).toBe(2);
+    expect(defaultThreshold("skaala 1–5")).toBe(0.1);
+  });
+});
+
+describe("dataState", () => {
+  const base = { baselineValue: 2.8, baselineYear: 2026, targetValue: 3.4, firstMeasurementDue: null, measurementMonth: 6 };
+  it("HARNO 2027 tulemus 18.11.2026: ootab mõõtmist, mitte puudus", () => {
+    const r = dataState({ ...base, resultYears: [2021, 2026] }, "2026-11-18", 2027);
+    expect(r.state).toBe("waiting");
+    expect(r.reason).toMatch(/juuni 2027/);
+  });
+  it("pärast juunit ilma tulemuseta: vajab tähelepanu", () => {
+    const r = dataState({ ...base, resultYears: [2026] }, "2027-08-15", 2027);
+    expect(r.state).toBe("attention");
+    expect(r.reason).toMatch(/2026\/27 tulemus puudub/);
+  });
+  it("arengukava-eelsed puuduvad aastad ei ole lünk (HARNO õpetajad 2024 → järgmine 2027)", () => {
+    const r = dataState({ ...base, baselineYear: 2024, resultYears: [2021, 2024], periodStartYear: 2027 }, "2026-11-18", 2027);
+    expect(r.state).toBe("waiting");
+    expect(r.reason).toMatch(/juuni 2027/);
+  });
+  it("tulemus olemas: ok", () => {
+    expect(dataState({ ...base, resultYears: [2026, 2027] }, "2027-08-15", 2027).state).toBe("ok");
+  });
+  it("algtase mõõdetakse sügisel 2027: ootab", () => {
+    const r = dataState({ ...base, baselineValue: null, baselineYear: null, targetValue: 70, firstMeasurementDue: "2027-11-30", resultYears: [] }, "2026-11-18", 2027);
+    expect(r.state).toBe("waiting");
+    expect(r.reason).toMatch(/november 2027/);
+  });
+  it("algtaseme tähtaeg möödas: vajab tähelepanu", () => {
+    const r = dataState({ ...base, baselineValue: null, baselineYear: null, targetValue: 70, firstMeasurementDue: "2027-11-30", resultYears: [] }, "2027-12-15", 2028);
+    expect(r.state).toBe("attention");
+  });
+  it("algtase puudub ja aeg määramata: vajab tähelepanu", () => {
+    expect(dataState({ ...base, baselineValue: null, baselineYear: null, resultYears: [] }, "2026-11-18", 2027).state).toBe("attention");
+  });
+  it("siht kinnitamata (algtase olemas): vajab tähelepanu", () => {
+    expect(dataState({ ...base, targetValue: null, resultYears: [2026] }, "2026-11-18", 2027).reason).toMatch(/Siht/);
+  });
+  it("sügisene mõõtmine kuulub alanud õppeaastasse", () => {
+    expect(resultDueDate(2028, 11)).toBe("2027-11-30");
+    expect(resultDueDate(2027, 6)).toBe("2027-06-30");
+  });
+});

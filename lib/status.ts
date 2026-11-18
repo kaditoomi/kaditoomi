@@ -215,3 +215,116 @@ export function chainBreak(items: ChainItem[]): boolean {
 
 const ORDER: Record<Status, number> = { red: 0, yellow: 1, gray: 2, green: 3 };
 export const byUrgency = (a: Status, b: Status) => ORDER[a] - ORDER[b];
+
+// ---------------------------------------------------------------------
+// Muutus: kas näitaja paranes, jäi samaks või langes (arvestades soovitud suunda).
+// ---------------------------------------------------------------------
+
+export type Change = "improved" | "unchanged" | "declined";
+
+/** Vaikimisi lävi: protsentides 2 protsendipunkti, skaaladel 0,1. */
+export function defaultThreshold(unit: string): number {
+  return unit.includes("%") ? 2 : 0.1;
+}
+
+/**
+ * Võrdleb kahte järjestikust väärtust. Väiksem kui lävi = "muutuseta".
+ * Kasv on paranemine (increase, maintain) või halvenemine (decrease).
+ */
+export function changeOf(
+  from: number,
+  to: number,
+  direction: TrendDirection,
+  threshold: number,
+): Change {
+  const diff = to - from;
+  // Väike ujukomaviga ei tohi muuta 0,1 piiri tulemust (nt 3,2 → 3,3).
+  if (Math.abs(diff) < threshold - 1e-9) return "unchanged";
+  const up = diff > 0;
+  const good = direction === "decrease" ? !up : up;
+  return good ? "improved" : "declined";
+}
+
+// ---------------------------------------------------------------------
+// Andmete seis: kas puuduv väärtus nõuab praegu tegevust või on lihtsalt veel tulemata.
+// ---------------------------------------------------------------------
+
+export type DataState = "ok" | "waiting" | "attention";
+
+export interface DataStateInput {
+  baselineValue: number | null;
+  baselineYear: number | null;
+  targetValue: number | null;
+  firstMeasurementDue: string | null; // YYYY-MM-DD
+  measurementMonth: number; // 1–12
+  resultYears: number[];
+  /** Arengukava esimene aasta: varasemaid puuduvaid tulemusi lüngaks ei loeta. */
+  periodStartYear?: number;
+}
+
+export interface DataStateResult {
+  state: DataState;
+  reason: string;
+  /** Millal järgmine (või puuduv) mõõtmine on oodata/oli oodata (YYYY-MM-DD). */
+  due: string | null;
+}
+
+const MONTHS = ["jaanuar", "veebruar", "märts", "aprill", "mai", "juuni", "juuli", "august", "september", "oktoober", "november", "detsember"];
+const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+const monthName = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+const yl = (y: number) => `${y - 1}/${String(y).slice(2)}`;
+
+/** Õppeaasta Y (nt 2027 = 2026/27) tulemus saabub kuu M lõpuks; sügiskuu (≥ 8) kuulub alanud õppeaastasse. */
+export function resultDueDate(year: number, month: number): string {
+  return lastDay(month >= 8 ? year - 1 : year, month);
+}
+
+/**
+ * Hindab mõõdiku andmete seisu kuupäeval asOf, arvestades aruandeaastat:
+ *  - "ok": viimane tähtaegselt oodatud tulemus on olemas;
+ *  - "waiting": mõõtmine on kavandatud hiljem (tulevikku planeeritud mõõtmine pole puudus);
+ *  - "attention": tähtaeg on möödas ja andmed puuduvad (või algtase/siht puudub ilma kavata).
+ */
+export function dataState(i: DataStateInput, asOf: string, reportYear: number): DataStateResult {
+  if (i.baselineValue == null) {
+    if (i.firstMeasurementDue && asOf <= i.firstMeasurementDue) {
+      return { state: "waiting", reason: `Algtase mõõdetakse ${monthName(i.firstMeasurementDue)}`, due: i.firstMeasurementDue };
+    }
+    if (i.firstMeasurementDue && i.resultYears.length > 0) {
+      // Esimene mõõtmine on tehtud tulemusena; algtase tuleb sellest seadistada.
+      return { state: "attention", reason: "Esimene mõõtmine on tehtud — kinnita algtase", due: i.firstMeasurementDue };
+    }
+    return {
+      state: "attention",
+      reason: i.firstMeasurementDue
+        ? `Algtaseme mõõtmine pidi toimuma ${monthName(i.firstMeasurementDue)}`
+        : "Algtase puudub ja mõõtmise aeg on määramata",
+      due: i.firstMeasurementDue,
+    };
+  }
+  // Viimane õppeaasta (≤ aruandeaasta), mille tulemuse tähtaeg on möödas.
+  let expected: number | null = null;
+  const firstExpected = Math.max((i.baselineYear ?? 0) + 1, i.periodStartYear ?? 0);
+  for (let y = reportYear; y >= firstExpected; y--) {
+    if (resultDueDate(y, i.measurementMonth) < asOf) {
+      expected = y;
+      break;
+    }
+  }
+  const nextYear = expected == null ? Math.max(reportYear, firstExpected) : expected + 1;
+  const nextDue = resultDueDate(nextYear, i.measurementMonth);
+  if (expected != null && !i.resultYears.includes(expected)) {
+    return {
+      state: "attention",
+      reason: `${yl(expected)} tulemus puudub (pidi saabuma ${monthName(resultDueDate(expected, i.measurementMonth))})`,
+      due: resultDueDate(expected, i.measurementMonth),
+    };
+  }
+  if (i.targetValue == null) {
+    return { state: "attention", reason: "Sihttase on kinnitamata", due: null };
+  }
+  if (expected == null) {
+    return { state: "waiting", reason: `Järgmine mõõtmine: ${monthName(nextDue)}`, due: nextDue };
+  }
+  return { state: "ok", reason: `Järgmine mõõtmine: ${monthName(nextDue)}`, due: nextDue };
+}

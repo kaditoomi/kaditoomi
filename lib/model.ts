@@ -3,8 +3,13 @@ import {
   DEFAULT_RULE,
   byUrgency,
   chainBreak,
+  changeOf,
+  dataState,
+  defaultThreshold,
   directionStatus,
   evaluateIndicator,
+  type Change,
+  type DataStateResult,
   type Evaluation,
   type Status,
   type StatusRule,
@@ -50,6 +55,14 @@ export interface IndicatorView extends Indicator {
   directionId: string;
   goal: Goal;
   evaluation: Evaluation;
+  /** Viimane mõõtmine (aruandeaastal või varem). */
+  last: { year: number; value: number } | null;
+  /** Sellele eelnev mõõtmine. */
+  prev: { year: number; value: number } | null;
+  /** Viimase mõõtmise muutus eelmisega võrreldes (null, kui võrdlust pole). */
+  change: Change | null;
+  data: DataStateResult;
+  ownerName: string | null;
   rule: StatusRuleRow | null;
   source: DataSource | null;
   results: IndicatorResult[];
@@ -61,6 +74,7 @@ export interface ActivityView extends Activity {
   goal: Goal;
   overdue: boolean;
   indicatorIds: string[];
+  ownerName: string | null;
 }
 
 export interface GoalView extends Goal {
@@ -89,6 +103,22 @@ export interface DirectionView extends Direction {
   decisions: Decision[];
   analyses: ImpactAnalysis[];
   gaps: DataGap[];
+  summary: DirectionSummary;
+}
+
+export interface AttentionItem {
+  kind: "data" | "overdue" | "declined" | "chain";
+  directionId: string;
+  text: string;
+  detail: string;
+  href: string;
+}
+
+export interface DirectionSummary {
+  activities: { done: number; inProgress: number; notStarted: number; postponed: number; total: number };
+  changes: { improved: number; unchanged: number; declined: number; noComparison: number };
+  waiting: number;
+  attention: AttentionItem[];
 }
 
 export interface PlanModel {
@@ -107,6 +137,8 @@ export interface PlanModel {
   gaps: DataGap[];
   attention: IndicatorView[];
   overdue: ActivityView[];
+  /** Tähelepanu vajavad asjad kõigis suundades (andmed, tähtajad, langused, otsused). */
+  attentionItems: AttentionItem[];
 }
 
 export const toRule = (r: StatusRuleRow | null): StatusRule =>
@@ -137,6 +169,7 @@ export function buildModel(raw: RawData, reportYear: number, asOf: string): Plan
         overdue:
           (a.status === "planned" || a.status === "in_progress") && a.dueDate != null && a.dueDate < asOf,
         indicatorIds: raw.activityIndicators.filter((x) => x.activityId === a.id).map((x) => x.indicatorId),
+        ownerName: a.ownerId ? profileById.get(a.ownerId)?.fullName ?? null : null,
       };
     });
 
@@ -158,11 +191,34 @@ export function buildModel(raw: RawData, reportYear: number, asOf: string): Plan
         toRule(rule),
         reportYear,
       );
+      const upTo = results.filter((r) => r.year <= reportYear);
+      const lastR = upTo.at(-1) ?? null;
+      const prevR = upTo.at(-2) ?? null;
+      const last = lastR ? { year: lastR.year, value: lastR.value } : null;
+      const prev = prevR ? { year: prevR.year, value: prevR.value } : null;
+      const threshold = i.changeThreshold ?? defaultThreshold(i.unit);
       return {
         ...i,
         goal,
         directionId: goal.directionId,
         evaluation,
+        last,
+        prev,
+        change: last && prev ? changeOf(prev.value, last.value, i.direction, threshold) : null,
+        data: dataState(
+          {
+            baselineValue: i.baselineValue,
+            baselineYear: i.baselineYear,
+            targetValue: i.targetValue,
+            firstMeasurementDue: i.firstMeasurementDue,
+            measurementMonth: i.measurementMonth ?? 6,
+            resultYears: results.map((r) => r.year),
+            periodStartYear: raw.plan.startYear,
+          },
+          asOf,
+          reportYear,
+        ),
+        ownerName: i.ownerId ? profileById.get(i.ownerId)?.fullName ?? null : null,
         rule,
         source: i.sourceId ? sourceById.get(i.sourceId) ?? null : null,
         results,
@@ -189,6 +245,62 @@ export function buildModel(raw: RawData, reportYear: number, asOf: string): Plan
     const overall = directionStatus(outcomes.map((i) => ({ status: i.evaluation.status, isKey: i.isKey })));
     const sortLevel = (xs: IndicatorView[]) =>
       [...xs].sort((a, b) => byUrgency(a.evaluation.status, b.evaluation.status));
+    const fmt = (n: number) => n.toLocaleString("et-EE", { maximumFractionDigits: 1 });
+    const attentionItems: AttentionItem[] = [
+      ...dAct
+        .filter((a) => a.overdue)
+        .map((a) => ({
+          kind: "overdue" as const,
+          directionId: d.id,
+          text: a.title,
+          detail: `Tähtaeg ${a.dueDate?.split("-").reverse().join(".")} on möödas`,
+          href: `/tegevused/${a.id}`,
+        })),
+      ...dInd
+        .filter((i) => i.kind === "outcome" && i.change === "declined" && i.last && i.prev)
+        .map((i) => ({
+          kind: "declined" as const,
+          directionId: d.id,
+          text: i.name,
+          detail: `Langes ${fmt(i.prev!.value)} → ${fmt(i.last!.value)} ${i.unit}`,
+          href: `/moodikud/${i.id}`,
+        })),
+      ...goals
+        .filter((g) => g.chainBreak)
+        .map((g) => ({
+          kind: "chain" as const,
+          directionId: d.id,
+          text: `${g.code}: praktika muutus, õppija tulemus mitte`,
+          detail: "Kas tegevus jõuab õppijani?",
+          href: `/suunad/${d.code}`,
+        })),
+      ...dInd
+        .filter((i) => i.data.state === "attention")
+        .map((i) => ({
+          kind: "data" as const,
+          directionId: d.id,
+          text: i.name,
+          detail: i.data.reason,
+          href: `/moodikud/${i.id}`,
+        })),
+    ];
+    const summary: DirectionSummary = {
+      activities: {
+        total: yearActs.length,
+        done: yearActs.filter((a) => a.status === "done").length,
+        inProgress: yearActs.filter((a) => a.status === "in_progress").length,
+        notStarted: yearActs.filter((a) => a.status === "planned").length,
+        postponed: yearActs.filter((a) => a.status === "postponed").length,
+      },
+      changes: {
+        improved: dInd.filter((i) => i.change === "improved").length,
+        unchanged: dInd.filter((i) => i.change === "unchanged").length,
+        declined: dInd.filter((i) => i.change === "declined").length,
+        noComparison: dInd.filter((i) => i.change == null).length,
+      },
+      waiting: dInd.filter((i) => i.data.state === "waiting").length,
+      attention: attentionItems,
+    };
     return {
       ...d,
       owners: raw.owners
@@ -216,6 +328,7 @@ export function buildModel(raw: RawData, reportYear: number, asOf: string): Plan
       decisions: raw.decisions.filter((x) => x.directionId === d.id),
       analyses: raw.analyses.filter((a) => a.directionId === d.id).sort((a, b) => b.year - a.year),
       gaps: raw.gaps.filter((g) => g.directionId === d.id),
+      summary,
     };
   });
 
@@ -247,6 +360,7 @@ export function buildModel(raw: RawData, reportYear: number, asOf: string): Plan
     decisions: raw.decisions,
     gaps: raw.gaps,
     attention,
+    attentionItems: directions.flatMap((d) => d.summary.attention),
     overdue: activities.filter((a) => a.overdue).sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? "")),
   };
 }

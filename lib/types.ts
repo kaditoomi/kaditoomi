@@ -61,6 +61,9 @@ export interface Indicator {
   ownerId: string | null;
   description: string | null;
   active: boolean;
+  measurementMonth: number;
+  firstMeasurementDue: string | null;
+  changeThreshold: number | null;
 }
 
 export interface IndicatorResult {
@@ -90,6 +93,7 @@ export interface Activity {
   status: ActivityStatus;
   completedOn: string | null;
   outcomeNote: string | null;
+  kind: "milestone" | "practice";
 }
 
 export interface ActivityIndicator {
@@ -138,6 +142,7 @@ export interface Decision {
   title: string;
   rationale: string | null;
   effectiveYear: number | null;
+  dueDate: string | null;
   ownerId: string | null;
   createdBy: string | null;
   createdAt: Date;

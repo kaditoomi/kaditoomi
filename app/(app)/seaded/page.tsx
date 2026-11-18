@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createDirection, createSource, saveRule, setDirectionOwners, updateProfile } from "@/app/actions/plan";
 import { Field, Select, optionsFrom } from "@/components/fields";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -13,6 +14,22 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Seaded</h1>
+
+      <Section title="Arengukava seadistus">
+        <p className="mb-3 text-sm text-ink-2">
+          Eesmärgid, mõõdikute definitsioonid, algtasemed, sihid, mõõtmise ajad ja tegevuskava. Igapäevane seire käib suuna lehel.
+        </p>
+        <div className="grid gap-2 md:grid-cols-3">
+          {model.directions.map((d) => (
+            <Link key={d.id} href={`/seaded/suunad/${d.code}`} className="rounded-md border border-line p-3 text-sm hover:bg-surface-2">
+              <span className="font-semibold">{d.code}</span> {d.title}
+              <span className="mt-1 block text-xs text-ink-3">
+                {d.goals.length} eesmärki · {d.indicators.length} mõõdikut · {d.activities.length} tegevust
+              </span>
+            </Link>
+          ))}
+        </div>
+      </Section>
 
       <Section title="Kasutajad ja rollid">
         <p className="mb-3 text-sm text-ink-2">

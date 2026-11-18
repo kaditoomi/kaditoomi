@@ -1,25 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { addEvidence, archiveIndicator, deleteEvidence, deleteResult, saveResult } from "@/app/actions/plan";
+import { addEvidence, deleteEvidence, deleteResult, saveResult } from "@/app/actions/plan";
 import { Field, Select } from "@/components/fields";
 import { ActionForm, SubmitButton } from "@/components/forms";
-import { IndicatorForm } from "@/components/indicator-form";
+import { ChangeBadge, DataChip } from "@/components/signals";
 import { StatusBadge, StatusDot } from "@/components/status";
 import { TrendChart } from "@/components/trend-chart";
 import { canEditDirection, requireUser } from "@/lib/auth";
 import { loadPlanModel } from "@/lib/data";
-import {
-  ACTIVITY_LABEL,
-  DECISION_LABEL,
-  DIRECTION_LABEL,
-  KIND_LABEL,
-  LEVEL_LABEL,
-  fmtDate,
-  fmtDateTime,
-  fmtNum,
-  fmtValue,
-  yearLabel,
-} from "@/lib/format";
+import { DECISION_LABEL, DIRECTION_LABEL, KIND_LABEL, activityStatusLabel, fmtDate, fmtDateTime, fmtNum, fmtValue, yearLabel } from "@/lib/format";
 import { chartSeries, statusForYear } from "@/lib/series";
 
 export default async function IndicatorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,119 +23,177 @@ export default async function IndicatorPage({ params }: { params: Promise<{ id: 
   const name = (pid: string | null) => model.profiles.find((p) => p.id === pid)?.fullName ?? "—";
   const sourceName = (sid: string | null) => model.sources.find((s) => s.id === sid)?.name;
   const decisions = model.decisions.filter((x) => x.indicatorId === i.id);
-  const resultYears = [model.plan.baselineYear, ...model.years].filter((y) => y > (i.baselineYear ?? 0));
+  const firstYear = Math.min(i.baselineYear ?? model.plan.startYear, model.plan.startYear);
+  const resultYears: number[] = [];
+  for (let y = firstYear; y <= model.plan.endYear; y++) resultYears.push(y);
   const series = chartSeries(i);
+  const defaultYear = Math.min(model.reportYear, model.plan.endYear);
 
   return (
     <div className="space-y-5">
-      <Link href={`/suunad/${dir.code}`} className="text-sm text-ink-3 hover:underline">
-        ← {dir.code} · {i.goal.code} {i.goal.title}
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link href={`/suunad/${dir.code}`} className="text-sm text-ink-3 hover:underline">
+          ← {dir.code} · {dir.title}
+        </Link>
+        {canEdit && (
+          <Link href={`/moodikud/${i.id}/seadista`} className="btn btn-sm">
+            ⚙ Seadista mõõdikut
+          </Link>
+        )}
+      </div>
 
-      <header className="card p-4">
+      <header className="card p-5">
         <p className="text-xs text-ink-3">
-          {i.code} · {KIND_LABEL[i.kind]} · {LEVEL_LABEL[i.impactLevel]} · {DIRECTION_LABEL[i.direction]} · {i.unit} · reegel{" "}
-          {i.rule ? `${i.rule.name} (${i.rule.greenMinPct}/${i.rule.yellowMinPct})` : "vaikimisi 75/40"}
+          {KIND_LABEL[i.kind]} · soovitud suund: {DIRECTION_LABEL[i.direction].toLowerCase()} · {i.source?.name ?? "allikas määramata"}
         </p>
         <h1 className="mt-1 text-2xl font-bold">
           {i.isKey && <span title="Võtmenäitaja">★ </span>}
           {i.name}
         </h1>
-        <div className="mt-3 flex flex-wrap items-center gap-x-8 gap-y-3">
-          <div>
-            <p className="h-section">Staatus {yearLabel(model.reportYear)}</p>
-            <div className="mt-1 flex items-center gap-2">
-              <StatusBadge status={e.status} />
-              <span className="text-sm text-ink-2">{e.reason}</span>
-            </div>
-          </div>
-          <Stat label={`Algtase ${i.baselineYear ? yearLabel(i.baselineYear) : ""}`} value={fmtValue(i.baselineValue, i.unit)} />
-          <Stat label={`Tulemus ${yearLabel(model.reportYear)}`} value={fmtValue(e.value, i.unit)} />
-          <Stat label={`Plaan ${yearLabel(model.reportYear)}`} value={fmtValue(e.plannedValue, i.unit)} />
-          <Stat label={`Siht ${yearLabel(i.targetYear)}`} value={fmtValue(i.targetValue, i.unit)} />
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Stat label="Algtase">
+            {fmtValue(i.baselineValue, i.unit)}
+            {i.baselineNote && <span className="block text-xs font-normal text-ink-3">{i.baselineNote}</span>}
+          </Stat>
+          <Stat label={i.last ? `Viimane mõõtmine (${yearLabel(i.last.year)})` : "Viimane mõõtmine"}>
+            {i.last ? fmtValue(i.last.value, i.unit) : "—"}
+            <span className="mt-1 block">
+              <ChangeBadge
+                change={i.change}
+                title={i.prev ? `Eelmine: ${yearLabel(i.prev.year)} ${fmtNum(i.prev.value)}` : undefined}
+              />
+            </span>
+          </Stat>
+          <Stat label={`Siht ${yearLabel(i.targetYear)}`}>{fmtValue(i.targetValue, i.unit)}</Stat>
+          <Stat label="Seis">
+            {i.data.state !== "ok" ? (
+              <span className="flex flex-col items-start gap-1">
+                <DataChip state={i.data.state} reason={i.data.reason} />
+                <span className="text-xs font-normal text-ink-3">{i.data.reason}</span>
+              </span>
+            ) : (
+              <span className="flex flex-col items-start gap-1">
+                <StatusBadge status={e.status} />
+                <span className="text-xs font-normal text-ink-3">{e.reason}</span>
+              </span>
+            )}
+          </Stat>
         </div>
-        {i.description && <p className="mt-3 text-sm text-ink-2">{i.description}</p>}
-        <p className="mt-2 text-xs text-ink-3">
-          Andmeallikas: {i.source?.name ?? "määramata"} · Vastutaja: {name(i.ownerId)}
-          {i.baselineNote && ` · Algtase: ${i.baselineNote}`}
-        </p>
+        {i.description && <p className="mt-4 text-sm text-ink-2">{i.description}</p>}
       </header>
 
-      <section className="card p-4">
-        <h2 className="mb-2 text-sm font-semibold">Trend</h2>
+      {canEdit && (
+        <section id="tulemus" className="card border-accent/30 p-5">
+          <h2 className="mb-1 text-lg font-bold">Lisa tulemus</h2>
+          <p className="mb-3 text-sm text-ink-3">
+            Sisesta uus väärtus. Süsteem võrdleb seda ise eelmise mõõtmise, algtaseme ja sihiga. Sama aasta uuesti salvestamine
+            parandab tulemust.
+          </p>
+          <ActionForm action={saveResult} className="grid gap-3 sm:grid-cols-[10rem_10rem_12rem_auto] sm:items-end" resetOnSuccess>
+            <input type="hidden" name="indicatorId" value={i.id} />
+            <Field label="Õppeaasta">
+              <Select name="year" options={resultYears.map((y) => ({ value: y, label: yearLabel(y) }))} defaultValue={defaultYear} />
+            </Field>
+            <Field label={`Väärtus (${i.unit})`}>
+              <input name="value" inputMode="decimal" className="input" required placeholder="nt 3,2" />
+            </Field>
+            <Field label="Mõõtmise aeg">
+              <input name="measuredOn" type="date" className="input" />
+            </Field>
+            <div>
+              <SubmitButton>Salvesta tulemus</SubmitButton>
+            </div>
+            <details className="sm:col-span-4">
+              <summary className="link text-sm">Lisaväljad: allikas, valim, kommentaar, tõendi link</summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Allikas" hint="Kui erineb mõõdiku tavapärasest allikast">
+                  <Select
+                    name="sourceId"
+                    empty={`Tavapärane (${i.source?.name ?? "—"})`}
+                    options={model.sources.map((s) => ({ value: s.id, label: s.name }))}
+                  />
+                </Field>
+                <Field label="Valimi suurus (n)">
+                  <input name="sampleSize" inputMode="numeric" className="input" />
+                </Field>
+                <Field label="Kommentaar">
+                  <input name="comment" className="input" />
+                </Field>
+                <Field label="Tõendi link (nt raport Drive'is)">
+                  <input name="evidenceUrl" type="url" className="input" placeholder="https://…" />
+                </Field>
+                <input type="hidden" name="evidenceTitle" value="Tõend" />
+              </div>
+            </details>
+          </ActionForm>
+        </section>
+      )}
+
+      <section className="card p-5">
+        <h2 className="mb-2 text-lg font-bold">Trend</h2>
         <TrendChart points={series.points} target={i.targetValue} unit={i.unit} reportYear={model.reportYear} />
       </section>
 
-      <section className="card p-4" id="tulemused">
-        <h2 className="mb-2 text-sm font-semibold">Tulemused ja andmete päritolu</h2>
+      <section className="card p-5">
+        <h2 className="mb-2 text-lg font-bold">Mõõtmised ja andmete päritolu</h2>
         <div className="overflow-x-auto">
-          <table className="table-basic min-w-[760px]">
+          <table className="table-basic min-w-[680px]">
             <thead>
               <tr>
-                <th>Aasta</th>
+                <th>Õppeaasta</th>
                 <th className="text-right">Väärtus</th>
-                <th>Staatus</th>
+                <th>Võrreldes eelmisega</th>
                 <th>Allikas</th>
-                <th>Mõõdetud</th>
                 <th>Sisestatud</th>
                 <th>Kommentaar ja tõendid</th>
                 {canEdit && <th />}
               </tr>
             </thead>
             <tbody>
-              {i.baselineValue != null && (
-                <tr>
-                  <td>{i.baselineYear ? yearLabel(i.baselineYear) : "—"}</td>
-                  <td className="text-right tabular-nums">{fmtNum(i.baselineValue)}</td>
-                  <td className="text-xs text-ink-3">algtase</td>
-                  <td className="text-xs">{i.source?.name ?? "—"}</td>
-                  <td colSpan={canEdit ? 4 : 3} className="text-xs text-ink-3">
-                    {i.baselineNote ?? ""}
-                  </td>
-                </tr>
-              )}
-              {i.results.map((r) => {
+              {[...i.results].reverse().map((r, idx, arr) => {
+                const prev = arr[idx + 1];
                 const ev = model.evidence.filter((x) => x.indicatorResultId === r.id);
+                const st = r.year > (i.baselineYear ?? 0) ? statusForYear(i, r.year) : null;
                 return (
                   <tr key={r.id}>
-                    <td>{yearLabel(r.year)}</td>
-                    <td className="text-right tabular-nums">{fmtNum(r.value)}</td>
-                    <td>
-                      <StatusDot status={statusForYear(i, r.year)} />
+                    <td className="whitespace-nowrap">
+                      {yearLabel(r.year)}
+                      {st && st !== "gray" && (
+                        <span className="ml-1.5 align-middle">
+                          <StatusDot status={st} />
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right font-semibold tabular-nums">{fmtNum(r.value)}</td>
+                    <td className="text-xs tabular-nums text-ink-2">
+                      {prev ? `${fmtNum(prev.value)} → ${fmtNum(r.value)}` : "—"}
                     </td>
                     <td className="text-xs">
                       {sourceName(r.sourceId) ?? i.source?.name ?? "—"}
                       {r.sampleSize != null && <span className="block text-ink-3">n = {r.sampleSize}</span>}
+                      {r.measuredOn && <span className="block text-ink-3">mõõdetud {fmtDate(r.measuredOn)}</span>}
                     </td>
-                    <td className="text-xs">{fmtDate(r.measuredOn)}</td>
                     <td className="text-xs">
-                      {name(r.enteredBy)}
+                      {r.enteredBy ? name(r.enteredBy) : "andmete import"}
                       <span className="block text-ink-3">{fmtDateTime(r.enteredAt)}</span>
-                      {r.updatedAt && (
-                        <span className="block text-ink-3">
-                          muutis {name(r.updatedBy)} {fmtDateTime(r.updatedAt)}
-                        </span>
-                      )}
                     </td>
                     <td className="text-xs">
                       {r.comment && <p className="mb-1">{r.comment}</p>}
-                      <ul className="space-y-0.5">
-                        {ev.map((x) => (
-                          <li key={x.id} className="flex items-center gap-2">
-                            <a href={x.url ?? "#"} target="_blank" rel="noreferrer noopener" className="link">
-                              🔗 {x.title}
-                            </a>
-                            {canEdit && (
-                              <ActionForm action={deleteEvidence} confirm="Eemaldada tõend?">
-                                <input type="hidden" name="id" value={x.id} />
-                                <button className="text-ink-3 hover:text-s-red" aria-label="Eemalda tõend">
-                                  ✕
-                                </button>
-                              </ActionForm>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
+                      {ev.map((x) => (
+                        <span key={x.id} className="mr-2 inline-flex items-center gap-1">
+                          <a href={x.url ?? "#"} target="_blank" rel="noreferrer noopener" className="link">
+                            🔗 {x.title}
+                          </a>
+                          {canEdit && (
+                            <ActionForm action={deleteEvidence} confirm="Eemaldada tõend?">
+                              <input type="hidden" name="id" value={x.id} />
+                              <button className="text-ink-3 hover:text-s-red" aria-label="Eemalda tõend">
+                                ✕
+                              </button>
+                            </ActionForm>
+                          )}
+                        </span>
+                      ))}
                       {canEdit && (
                         <details className="mt-1">
                           <summary className="cursor-pointer text-ink-3">+ tõend</summary>
@@ -163,9 +210,7 @@ export default async function IndicatorPage({ params }: { params: Promise<{ id: 
                       <td>
                         <ActionForm action={deleteResult} confirm={`Kustutada ${yearLabel(r.year)} tulemus?`}>
                           <input type="hidden" name="id" value={r.id} />
-                          <SubmitButton variant="danger" small>
-                            Kustuta
-                          </SubmitButton>
+                          <button className="text-xs text-ink-3 hover:text-s-red">Kustuta</button>
                         </ActionForm>
                       </td>
                     )}
@@ -174,86 +219,38 @@ export default async function IndicatorPage({ params }: { params: Promise<{ id: 
               })}
               {i.results.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-sm text-ink-3">
-                    Tulemusi pole veel sisestatud.
+                  <td colSpan={7} className="text-sm text-ink-3">
+                    Mõõtmisi pole veel. {i.data.reason}.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-
-        {canEdit && (
-          <div id="tulemus" className="mt-4 rounded-md border border-line p-3">
-            <h3 className="mb-2 text-sm font-semibold">Lisa või paranda aasta tulemus</h3>
-            <ActionForm action={saveResult} className="grid gap-3 md:grid-cols-6" resetOnSuccess>
-              <input type="hidden" name="indicatorId" value={i.id} />
-              <Field label="Õppeaasta">
-                <Select
-                  name="year"
-                  options={resultYears.map((y) => ({ value: y, label: yearLabel(y) }))}
-                  defaultValue={model.reportYear}
-                />
-              </Field>
-              <Field label={`Väärtus (${i.unit})`}>
-                <input name="value" inputMode="decimal" className="input" required />
-              </Field>
-              <Field label="Mõõtmise kuupäev">
-                <input name="measuredOn" type="date" className="input" />
-              </Field>
-              <Field label="Valimi suurus (n)">
-                <input name="sampleSize" inputMode="numeric" className="input" />
-              </Field>
-              <Field label="Allikas" className="md:col-span-2" hint="Kui erineb mõõdiku allikast">
-                <Select
-                  name="sourceId"
-                  empty={`Mõõdiku allikas (${i.source?.name ?? "—"})`}
-                  options={model.sources.map((s) => ({ value: s.id, label: s.name }))}
-                />
-              </Field>
-              <Field label="Kommentaar" className="md:col-span-2">
-                <input name="comment" className="input" />
-              </Field>
-              <Field label="Tõendi pealkiri">
-                <input name="evidenceTitle" className="input" placeholder="nt HARNO raport" />
-              </Field>
-              <Field label="Tõendi link" className="md:col-span-2">
-                <input name="evidenceUrl" type="url" className="input" placeholder="https://…" />
-              </Field>
-              <div className="flex items-end">
-                <SubmitButton>Salvesta tulemus</SubmitButton>
-              </div>
-            </ActionForm>
-            <p className="mt-2 text-xs text-ink-3">
-              Sisestaja ja sisestamise aeg salvestatakse automaatselt. Sama aasta uuesti salvestamine parandab olemasolevat
-              tulemust.
-            </p>
-          </div>
-        )}
       </section>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <section className="card p-4">
-          <h2 className="mb-2 text-sm font-semibold">Seotud tegevused</h2>
+        <section className="card p-5">
+          <h2 className="mb-2 font-bold">Seotud tegevused</h2>
           {i.activities.length === 0 ? (
             <p className="text-sm text-ink-3">Ükski tegevus pole selle mõõdikuga seotud.</p>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <ul className="space-y-1.5 text-sm">
               {i.activities.map((a) => (
                 <li key={a.id}>
                   <Link href={`/tegevused/${a.id}`} className="link">
                     {a.title}
                   </Link>{" "}
                   <span className="text-xs text-ink-3">
-                    {yearLabel(a.year)} · {a.overdue ? "tähtaeg ületatud" : ACTIVITY_LABEL[a.status]}
+                    {yearLabel(a.year)} · {a.overdue ? "tähtaeg möödas" : activityStatusLabel(a.kind ?? "milestone", a.status)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
         </section>
-        <section className="card p-4">
-          <h2 className="mb-2 text-sm font-semibold">Juhtimisotsused</h2>
+        <section className="card p-5">
+          <h2 className="mb-2 font-bold">Juhtimisotsused</h2>
           {decisions.length === 0 ? (
             <p className="text-sm text-ink-3">
               Otsuseid pole.{" "}
@@ -275,28 +272,15 @@ export default async function IndicatorPage({ params }: { params: Promise<{ id: 
           )}
         </section>
       </div>
-
-      {canEdit && (
-        <details className="card p-4" id="muuda">
-          <summary className="cursor-pointer text-sm font-medium">✎ Muuda mõõdikut</summary>
-          <div className="mt-4">
-            <IndicatorForm model={model} goalId={i.goalId} indicator={i} />
-          </div>
-          <ActionForm action={archiveIndicator} className="mt-6 border-t border-line pt-4" confirm="Arhiveerida mõõdik? Ajalugu säilib.">
-            <input type="hidden" name="id" value={i.id} />
-            <SubmitButton variant="danger">Arhiveeri mõõdik</SubmitButton>
-          </ActionForm>
-        </details>
-      )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <p className="h-section">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
+      <div className="mt-1 text-lg font-bold tabular-nums">{children}</div>
     </div>
   );
 }

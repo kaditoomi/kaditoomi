@@ -5,7 +5,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { StatusBadge, StatusDot } from "@/components/status";
 import { canEditDirection, requireUser } from "@/lib/auth";
 import { loadPlanModel, modelForYear } from "@/lib/data";
-import { ACTIVITY_LABEL, DECISION_LABEL, fmtDate, fmtDateTime, fmtNum, yearLabel } from "@/lib/format";
+import { activityStatusLabel, DECISION_LABEL, fmtDate, fmtDateTime, fmtNum, yearLabel } from "@/lib/format";
 import type { Status } from "@/lib/status";
 import type { ImpactAnalysis } from "@/lib/types";
 
@@ -44,7 +44,7 @@ export default async function AnalysisPage({ params }: { params: Promise<{ code:
     : {
         planned: yearActs.map((a) => `• ${a.title}`).join("\n"),
         done: yearActs
-          .map((a) => `• ${a.title} — ${ACTIVITY_LABEL[a.status].toLowerCase()}${a.outcomeNote ? ` (${a.outcomeNote})` : ""}`)
+          .map((a) => `• ${a.title} — ${activityStatusLabel(a.kind ?? "milestone", a.status).toLowerCase()}${a.outcomeNote ? ` (${a.outcomeNote})` : ""}`)
           .join("\n"),
       };
 
@@ -145,7 +145,7 @@ export default async function AnalysisPage({ params }: { params: Promise<{ code:
                 {yearActs.map((a) => (
                   <li key={a.id}>
                     {a.overdue ? "⚠" : a.status === "done" ? "✓" : "○"} {a.title}{" "}
-                    <span className="text-ink-3">({a.overdue ? "tähtaeg ületatud" : ACTIVITY_LABEL[a.status].toLowerCase()})</span>
+                    <span className="text-ink-3">({a.overdue ? "tähtaeg ületatud" : activityStatusLabel(a.kind ?? "milestone", a.status).toLowerCase()})</span>
                   </li>
                 ))}
               </ul>

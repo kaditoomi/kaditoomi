@@ -8,7 +8,7 @@ ADMIN_URL="${DATABASE_URL%/*}/postgres"
 psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "drop database if exists \"$DB_NAME\" with (force)" -c "create database \"$DB_NAME\""
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f supabase/local/auth-stub.sql
 # Kindel järjekord (lokaadi sortimine võiks muidu 0001b panna enne 0001_skeem)
-for f in 0001_skeem.sql 0001b_turvaparandus.sql 0002_kasutajad.sql; do
+for f in 0001_skeem.sql 0001b_turvaparandus.sql 0002_kasutajad.sql 0003_seire_lihtsustus.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "supabase/migrations/$f"
 done
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f supabase/seed.sql

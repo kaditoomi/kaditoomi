@@ -6,7 +6,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { PlanContext } from "@/components/plan-context";
 import { canEditDirection, requireUser } from "@/lib/auth";
 import { loadPlanModel } from "@/lib/data";
-import { ACTIVITY_LABEL, fmtDate, yearLabel } from "@/lib/format";
+import { activityStatusLabel, fmtDate, yearLabel } from "@/lib/format";
 
 export default async function ActivityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +32,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
         <h1 className="mt-1 text-2xl font-bold">{a.title}</h1>
         <p className="mt-1 text-sm">
           <span className={a.overdue ? "font-semibold text-s-red" : ""}>
-            {a.overdue ? `⚠ Tähtaeg ületatud (${fmtDate(a.dueDate)})` : ACTIVITY_LABEL[a.status]}
+            {a.overdue ? `⚠ Tähtaeg ületatud (${fmtDate(a.dueDate)})` : activityStatusLabel(a.kind ?? "milestone", a.status)}
           </span>
           {a.status === "done" && ` · toimus ${fmtDate(a.completedOn)}`}
           {a.dueDate && !a.overdue && ` · tähtaeg ${fmtDate(a.dueDate)}`}

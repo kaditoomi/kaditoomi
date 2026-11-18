@@ -5,12 +5,18 @@ import { toRule } from "./model";
 
 /** Diagrammi andmed: tegelik väärtus ja lineaarne plaan algtasemest sihini. */
 export function chartSeries(i: IndicatorView): ChartSeries {
-  const start = i.baselineYear ?? i.results[0]?.year ?? i.targetYear;
+  // Algab varaseimast mõõtmisest (ajalugu, nt HARNO 2021), muidu algtaseme aastast.
+  const start = Math.min(i.results[0]?.year ?? Infinity, i.baselineYear ?? Infinity, i.targetYear);
   const points = [];
-  for (let y = Math.min(start, i.targetYear); y <= Math.max(i.targetYear, i.results.at(-1)?.year ?? 0); y++) {
-    const actual = y === i.baselineYear ? i.baselineValue : i.results.find((r) => r.year === y)?.value ?? null;
+  for (let y = start; y <= Math.max(i.targetYear, i.results.at(-1)?.year ?? 0); y++) {
+    const measured = i.results.find((r) => r.year === y)?.value;
+    // Tegelik väärtus = mõõtmine; algtase (sageli mitme aasta keskmine) ainult siis, kui mõõtmist pole.
+    const actual = measured ?? (y === i.baselineYear ? i.baselineValue : null);
     let planned: number | null = null;
-    if (i.baselineValue != null && i.baselineYear != null && i.targetValue != null && i.targetYear > i.baselineYear) {
+    if (
+      i.baselineValue != null && i.baselineYear != null && i.targetValue != null &&
+      i.targetYear > i.baselineYear && y >= i.baselineYear
+    ) {
       planned =
         i.direction === "maintain"
           ? i.targetValue
